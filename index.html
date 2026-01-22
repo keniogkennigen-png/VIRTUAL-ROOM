@@ -403,25 +403,32 @@
     </div>
     <div id="dashboard-content">
         <div id="dashboard-controls">
-            <button class="dashboard-btn active" data-mode="none">📄 No Content</button>
-            <button class="dashboard-btn" data-mode="pdf">📑 PDF Viewer</button>
-            <button class="dashboard-btn" data-mode="video">🎬 Video Player</button>
+            <button class="dashboard-btn active" data-mode="none" onclick="setDashboardMode('none')">📄 No Content</button>
+            <button class="dashboard-btn" data-mode="pdf" onclick="selectPdfMode()">📑 PDF Viewer</button>
+            <button class="dashboard-btn" data-mode="video" onclick="selectVideoMode()">🎬 Video Player</button>
+
+            <!-- VISIBLE FILE INPUT BUTTONS -->
+            <div id="pdf-upload-area" style="display:none; margin-top:15px;">
+                <label for="pdf-file-input" class="dashboard-btn" style="display:block; text-align:center; background:#00f3ff; color:#000;">📁 Select PDF File</label>
+                <input type="file" id="pdf-file-input" accept=".pdf" style="display:none;" onchange="handlePdfUpload(event)">
+            </div>
+
+            <div id="video-upload-area" style="display:none; margin-top:15px;">
+                <label for="video-file-input" class="dashboard-btn" style="display:block; text-align:center; background:#00f3ff; color:#000;">📁 Select Video File</label>
+                <input type="file" id="video-file-input" accept="video/*" style="display:none;" onchange="handleVideoUpload(event)">
+            </div>
         </div>
         <div id="dashboard-main">
             <div class="placeholder" id="dashboard-placeholder">
                 <div class="placeholder-icon">📊</div>
                 <p>No content loaded</p>
-                <p style="font-size: 11px; color: #555;">Click a button to load content</p>
+                <p style="font-size: 11px; color: #555;">Select PDF or Video to begin</p>
             </div>
             <canvas id="pdf-render" style="display:none;"></canvas>
             <video id="video-player" style="display:none;" controls></video>
         </div>
     </div>
 </div>
-
-<!-- HIDDEN FILE INPUTS -->
-<input type="file" id="pdf-file-input" accept=".pdf">
-<input type="file" id="video-file-input" accept="video/*">
 
 <script>
     // ==================== CONFIGURATION ====================
@@ -645,21 +652,26 @@
         closeBtn.addEventListener('click', () => toggleDashboard(false));
         overlay.addEventListener('click', () => toggleDashboard(false));
 
-        // Dashboard mode buttons - auto open file dialog
+        // Dashboard mode buttons - show file input areas
         dashboardBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 const mode = btn.dataset.mode;
                 setDashboardMode(mode);
-                // Auto-open file dialog for PDF or Video
-                setTimeout(() => {
-                    if (mode === 'pdf') {
-                        document.getElementById('pdf-file-input').click();
-                    } else if (mode === 'video') {
-                        document.getElementById('video-file-input').click();
-                    }
-                }, 100);
             });
         });
+
+        // Helper functions for PDF/Video selection
+        window.selectPdfMode = function() {
+            setDashboardMode('pdf');
+            document.getElementById('pdf-upload-area').style.display = 'block';
+            document.getElementById('video-upload-area').style.display = 'none';
+        };
+
+        window.selectVideoMode = function() {
+            setDashboardMode('video');
+            document.getElementById('video-upload-area').style.display = 'block';
+            document.getElementById('pdf-upload-area').style.display = 'none';
+        };
 
         // Open content button - opens dashboard and lets user select type
         document.getElementById('open-content-btn').addEventListener('click', () => {
@@ -667,10 +679,6 @@
             // Automatically select video mode by default (or PDF if that's what was last used)
             setDashboardMode(currentDashboardMode === 'pdf' ? 'pdf' : 'video');
         });
-
-        // File inputs
-        document.getElementById('pdf-file-input').addEventListener('change', handlePdfUpload);
-        document.getElementById('video-file-input').addEventListener('change', handleVideoUpload);
 
         // Reset view button
         document.getElementById('reset-view-btn').addEventListener('click', resetView);
@@ -713,6 +721,10 @@
         videoElement.pause();
         pdfCanvas.style.display = 'none';
 
+        // Hide upload areas
+        document.getElementById('pdf-upload-area').style.display = 'none';
+        document.getElementById('video-upload-area').style.display = 'none';
+
         // Reset PDF
         pdfContext.clearRect(0, 0, pdfCanvas.width, pdfCanvas.height);
 
@@ -721,7 +733,8 @@
         }
     }
 
-    function handlePdfUpload(event) {
+    // Make global for inline onchange handlers
+    window.handlePdfUpload = function(event) {
         const file = event.target.files[0];
         if (!file || file.type !== 'application/pdf') {
             addMessage('System', 'Please select a valid PDF file');
@@ -756,7 +769,8 @@
         reader.readAsArrayBuffer(file);
     }
 
-    function handleVideoUpload(event) {
+    // Make global for inline onchange handlers
+    window.handleVideoUpload = function(event) {
         const file = event.target.files[0];
         if (!file || !file.type.startsWith('video/')) {
             addMessage('System', 'Please select a valid video file');
