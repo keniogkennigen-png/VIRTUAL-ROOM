@@ -1,17 +1,14 @@
 {
   "name": "virtual-room",
   "version": "1.0.0",
-  "description": "Sala VR Colaborativa Profesional",
+  "description": "Virtual Collaborative Room - Chat, PDF & Video Sharing",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test.js"
+    "dev": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.7.2"
-  },
-  "devDependencies": {
-    "playwright": "^1.40.0"
   }
 }
