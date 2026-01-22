@@ -645,23 +645,27 @@
         closeBtn.addEventListener('click', () => toggleDashboard(false));
         overlay.addEventListener('click', () => toggleDashboard(false));
 
-        // Dashboard mode buttons
+        // Dashboard mode buttons - auto open file dialog
         dashboardBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 const mode = btn.dataset.mode;
                 setDashboardMode(mode);
+                // Auto-open file dialog for PDF or Video
+                setTimeout(() => {
+                    if (mode === 'pdf') {
+                        document.getElementById('pdf-file-input').click();
+                    } else if (mode === 'video') {
+                        document.getElementById('video-file-input').click();
+                    }
+                }, 100);
             });
         });
 
-        // Open content button
+        // Open content button - opens dashboard and lets user select type
         document.getElementById('open-content-btn').addEventListener('click', () => {
-            if (currentDashboardMode === 'pdf') {
-                document.getElementById('pdf-file-input').click();
-            } else if (currentDashboardMode === 'video') {
-                document.getElementById('video-file-input').click();
-            } else {
-                addMessage('System', 'Please select PDF or Video mode first');
-            }
+            toggleDashboard(true);
+            // Automatically select video mode by default (or PDF if that's what was last used)
+            setDashboardMode(currentDashboardMode === 'pdf' ? 'pdf' : 'video');
         });
 
         // File inputs
