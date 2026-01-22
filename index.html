@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>HoloMeet VR - Ultra Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #010103; font-family: 'Segoe UI', sans-serif; }
+        #hud {
+            position: fixed; inset: 0; pointer-events: none;
+            color: #00f3ff; text-transform: uppercase; letter-spacing: 2px;
+            padding: 25px; display: flex; flex-direction: column; justify-content: space-between;
+            z-index: 100;
+        }
+        .hud-panel { background: rgba(0, 243, 255, 0.1); border: 1px solid #00f3ff; padding: 15px; backdrop-filter: blur(10px); box-shadow: 0 0 15px rgba(0,243,255,0.2); }
+        .top-row { display: flex; justify-content: space-between; }
+        .controls { pointer-events: auto; display: flex; gap: 10px; justify-content: center; }
+        button { background: #00f3ff; color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #fff; box-shadow: 0 0 20px #00f3ff; }
+        #pdf-canvas { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="hud">
+    <div class="top-row">
+        <div class="hud-panel">SESSION: <span id="session-id">---</span></div>
+        <div class="hud-panel" id="utc-clock">UTC: 00:00:00</div>
+    </div>
+
+    <div class="controls">
+        <input type="file" id="pdf-upload" accept=".pdf" style="display:none">
+        <button onclick="document.getElementById('pdf-upload').click()">SUBIR PDF</button>
+        <button id="mic-btn" onmousedown="ptt(true)" onmouseup="ptt(false)">HABLAR (PTT)</button>
+        <button onclick="resetView()">RESET CAM</button>
+    </div>
+</div>
+
+<canvas id="pdf-canvas"></canvas>
+
+<script>
+    let scene, camera, renderer, dashboard, audioAmbience;
+    const urlParams = new URLSearchParams(window.location.search);
+    let roomId = urlParams.get('room') || 'VIP-' + Math.random().toString(36).substr(2, 5).toUpperCase();
+    if(!urlParams.get('room')) window.history.pushState({}, '', `?room=${roomId}`);
+
+    function init() {
+        scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x010103, 0.04);
+
+        camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.7, 7);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        document.body.appendChild(renderer.domElement);
+
+        // --- SONIDO AMBIENTAL ---
+        const listener = new THREE.AudioListener();
+        camera.add(listener);
+        audioAmbience = new THREE.Audio(listener);
+
+        // Oscilador para crear sonido "Sci-Fi" sin archivos externos
+        const audioCtx = THREE.AudioContext.getContext();
+        const oscillator = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(50, audioCtx.currentTime); // Zumbido bajo
+        gain.gain.setValueAtTime(0.01, audioCtx.currentTime);
+        oscillator.connect(gain);
+        gain.connect(audioCtx.destination);
+        oscillator.start();
+
+        // --- ILUMINACIÓN DINÁMICA ---
+        const mainLight = new THREE.RectAreaLight(0x00f3ff, 5, 10, 10);
+        mainLight.position.set(0, 5, -2);
+        scene.add(mainLight);
+
+        // Suelo de espejo pulido
+        const floor = new THREE.Mesh(
+            new THREE.PlaneGeometry(40, 40),
+            new THREE.MeshStandardMaterial({ color: 0x050505, metalness: 1, roughness: 0.1 })
+        );
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // Mesa de Juntas
+        const table = new THREE.Mesh(
+            new THREE.BoxGeometry(6, 0.1, 3),
+            new THREE.MeshStandardMaterial({ color: 0x0a0a0a, metalness: 1, roughness: 0.2 })
+        );
+        table.position.y = 0.8;
+        scene.add(table);
+
+        // Pantalla Dashboard
+        dashboard = new THREE.Mesh(
+            new THREE.PlaneGeometry(7, 4),
+            new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.2, side: THREE.DoubleSide })
+        );
+        dashboard.position.set(0, 2.8, -5);
+        scene.add(dashboard);
+
+        // Generar 10 Sillas
+        for(let i=0; i<10; i++) {
+            const chairGroup = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({color: 0x050505});
+            const seat = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.1,0.7), mat);
+            const back = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.9,0.1), mat);
+            back.position.set(0, 0.45, -0.35);
+            chairGroup.add(seat, back);
+
+            const angle = (i / 10) * Math.PI * 2;
+            chairGroup.position.set(Math.cos(angle)*4.5, 0, Math.sin(angle)*4.5);
+            chairGroup.lookAt(0, 0, 0);
+            scene.add(chairGroup);
+        }
+
+        document.getElementById('session-id').innerText = roomId;
+        updateClock();
+        setInterval(updateClock, 1000);
+        animate();
+    }
+
+    // LÓGICA DE PDF A TEXTURA
+    document.getElementById('pdf-upload').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = async function() {
+            const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
+            const page = await pdf.getPage(1);
+            const canvas = document.getElementById('pdf-canvas');
+            const context = canvas.getContext('2d');
+            const viewport = page.getViewport({ scale: 2 });
+            canvas.width = viewport.width; canvas.height = viewport.height;
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+            new THREE.TextureLoader().load(canvas.toDataURL(), (tex) => {
+                dashboard.material.map = tex;
+                dashboard.material.opacity = 1;
+                dashboard.material.needsUpdate = true;
+            });
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    function updateClock() {
+        const d = new Date();
+        document.getElementById('utc-clock').innerText = "UTC: " + d.getUTCHours().toString().padStart(2,'0') + ":" + d.getUTCMinutes().toString().padStart(2,'0') + ":" + d.getUTCSeconds().toString().padStart(2,'0');
+    }
+
+    function ptt(on) {
+        document.getElementById('mic-btn').style.background = on ? "#ff3e3e" : "#00f3ff";
+    }
+
+    function resetView() { camera.position.set(0, 1.7, 7); camera.lookAt(0, 1.5, 0); }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        dashboard.position.y = 2.8 + Math.sin(Date.now()*0.0015)*0.08; // Flotación suave
+        renderer.render(scene, camera);
+    }
+
+    window.onload = init;
+</script>
+</body>
+</html>
