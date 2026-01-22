@@ -1,169 +1,514 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>HoloMeet VR - Ultra Edition</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloMeet VR - Holographic Conference Room</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #010103; font-family: 'Segoe UI', sans-serif; }
-        #hud {
-            position: fixed; inset: 0; pointer-events: none;
-            color: #00f3ff; text-transform: uppercase; letter-spacing: 2px;
-            padding: 25px; display: flex; flex-direction: column; justify-content: space-between;
-            z-index: 100;
-        }
-        .hud-panel { background: rgba(0, 243, 255, 0.1); border: 1px solid #00f3ff; padding: 15px; backdrop-filter: blur(10px); box-shadow: 0 0 15px rgba(0,243,255,0.2); }
-        .top-row { display: flex; justify-content: space-between; }
-        .controls { pointer-events: auto; display: flex; gap: 10px; justify-content: center; }
-        button { background: #00f3ff; color: #000; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:hover { background: #fff; box-shadow: 0 0 20px #00f3ff; }
-        #pdf-canvas { display: none; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #000; font-family: 'Segoe UI', system-ui, sans-serif; }
+        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
+        .ui-overlay { position: fixed; z-index: 100; pointer-events: none; }
+        .ui-overlay > * { pointer-events: auto; }
+        .top-bar { top: 0; left: 0; right: 0; height: 60px; background: linear-gradient(180deg, rgba(5,5,16,0.95) 0%, rgba(5,5,16,0) 100%); display: flex; justify-content: space-between; align-items: center; padding: 0 30px; }
+        .room-info { display: flex; align-items: center; gap: 15px; }
+        .room-id { color: #00F3FF; font-size: 14px; background: rgba(0,243,255,0.1); border: 1px solid rgba(0,243,255,0.3); padding: 8px 16px; border-radius: 20px; cursor: pointer; transition: all 0.3s ease; }
+        .room-id:hover { background: rgba(0,243,255,0.2); box-shadow: 0 0 20px rgba(0,243,255,0.4); }
+        .participant-count { color: #fff; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .participant-count::before { content: ''; width: 8px; height: 8px; background: #00FF88; border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .control-panel { bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; padding: 15px 25px; background: rgba(5,5,16,0.9); border: 1px solid rgba(0,243,255,0.2); border-radius: 50px; backdrop-filter: blur(20px); }
+        .control-btn { width: 50px; height: 50px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+        .control-btn:hover { transform: scale(1.1); }
+        .control-btn.active { background: rgba(0,243,255,0.2); border-color: #00F3FF; box-shadow: 0 0 20px rgba(0,243,255,0.3); }
+        .control-btn.muted { background: rgba(255,50,50,0.2); border-color: #FF3232; }
+        .control-btn svg { width: 24px; height: 24px; fill: #fff; }
+        .control-btn.active svg { fill: #00F3FF; }
+        .control-btn.muted svg { fill: #FF3232; }
+        .ptt-indicator { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); color: #00F3FF; font-size: 14px; padding: 8px 20px; background: rgba(0,243,255,0.1); border: 1px solid rgba(0,243,255,0.3); border-radius: 20px; opacity: 0; transition: opacity 0.2s ease; }
+        .ptt-indicator.active { opacity: 1; }
+        .dashboard-panel { top: 50%; right: 20px; transform: translateY(-50%); width: 280px; padding: 20px; background: rgba(5,5,16,0.9); border: 1px solid rgba(112,0,255,0.3); border-radius: 20px; backdrop-filter: blur(20px); }
+        .panel-title { color: #fff; font-size: 16px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
+        .panel-title::before { content: ''; width: 4px; height: 20px; background: #7000FF; border-radius: 2px; }
+        .dashboard-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab-btn { flex: 1; padding: 10px; border: none; border-radius: 10px; cursor: pointer; background: rgba(255,255,255,0.05); color: #888; font-size: 12px; transition: all 0.3s ease; }
+        .tab-btn.active { background: rgba(112,0,255,0.3); color: #fff; border: 1px solid rgba(112,0,255,0.5); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { color: #888; font-size: 12px; display: block; margin-bottom: 8px; }
+        .input-group input, .input-group textarea { width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; background: rgba(255,255,255,0.05); color: #fff; font-size: 14px; resize: none; }
+        .input-group input:focus, .input-group textarea:focus { outline: none; border-color: #7000FF; }
+        .action-btn { width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; margin-bottom: 10px; }
+        .action-btn.primary { background: linear-gradient(135deg, #7000FF, #00F3FF); color: #fff; }
+        .action-btn.secondary { background: rgba(255,255,255,0.1); color: #fff; }
+        .action-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(112,0,255,0.4); }
+        .video-preview { width: 100%; height: 120px; background: rgba(0,0,0,0.5); border-radius: 10px; margin-bottom: 10px; overflow: hidden; position: relative; }
+        .video-preview iframe { width: 100%; height: 100%; border: none; }
+        .pdf-preview { width: 100%; height: 120px; background: rgba(255,255,255,0.05); border-radius: 10px; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; color: #888; font-size: 12px; border: 1px dashed rgba(255,255,255,0.2); }
+        .slide-nav { display: flex; gap: 10px; align-items: center; }
+        .slide-nav span { flex: 1; text-align: center; color: #fff; font-size: 14px; }
+        .nav-btn { width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer; background: rgba(255,255,255,0.1); color: #fff; font-size: 18px; transition: all 0.3s ease; }
+        .nav-btn:hover { background: rgba(112,0,255,0.3); }
+        .avatar-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+        .avatar-options { display: flex; gap: 10px; margin-top: 10px; }
+        .avatar-option { width: 50px; height: 50px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; background: rgba(255,255,255,0.1); transition: all 0.3s ease; }
+        .avatar-option.selected { border-color: #00F3FF; box-shadow: 0 0 15px rgba(0,243,255,0.4); }
+        .avatar-option:hover { transform: scale(1.1); }
     </style>
 </head>
 <body>
-
-<div id="hud">
-    <div class="top-row">
-        <div class="hud-panel">SESSION: <span id="session-id">---</span></div>
-        <div class="hud-panel" id="utc-clock">UTC: 00:00:00</div>
+    <div id="canvas-container"></div>
+    <div class="ui-overlay">
+        <div class="top-bar">
+            <div class="room-info">
+                <div class="room-id" id="roomId">Room ID: Loading...</div>
+                <div class="participant-count" id="participantCount">1 participants</div>
+            </div>
+        </div>
+        <div class="control-panel">
+            <button class="control-btn" id="micBtn"><svg><use xlink:href="#mic-icon"></use></svg></button>
+            <button class="control-btn" id="cameraBtn"><svg><use xlink:href="#camera-icon"></use></svg></button>
+            <button class="control-btn" id="screenBtn"><svg><use xlink:href="#screen-icon"></use></svg></button>
+            <button class="control-btn" id="participantsBtn"><svg><use xlink:href="#participants-icon"></use></svg></button>
+        </div>
+        <div class="ptt-indicator" id="pttIndicator">Push to Talk (Spacebar)</div>
+        <div class="dashboard-panel">
+            <div class="panel-title">Presentation Dashboard</div>
+            <div class="dashboard-tabs">
+                <button class="tab-btn active" data-tab="youtube">YouTube</button>
+                <button class="tab-btn" data-tab="pdf">PDF Slides</button>
+            </div>
+            <div class="tab-content active" id="youtubeTab">
+                <div class="input-group">
+                    <label>YouTube URL or Video ID</label>
+                    <input type="text" id="youtubeUrl" placeholder="https://youtu.be/... or video ID">
+                </div>
+                <button class="action-btn primary" id="loadVideo">Load Video</button>
+                <div class="video-preview" id="videoPreview"></div>
+            </div>
+            <div class="tab-content" id="pdfTab">
+                <div class="input-group">
+                    <label>PDF File</label>
+                    <input type="file" id="pdfFile" accept=".pdf">
+                </div>
+                <button class="action-btn primary" id="loadPdf">Load PDF</button>
+                <div class="pdf-preview" id="pdfPreview">No PDF loaded</div>
+                <div class="slide-nav">
+                    <button class="nav-btn" id="prevSlide">◀</button>
+                    <span id="slideCounter">Slide 1 / 1</span>
+                    <button class="nav-btn" id="nextSlide">▶</button>
+                </div>
+            </div>
+            <div class="avatar-section">
+                <div class="panel-title">Your Avatar</div>
+                <div class="avatar-options">
+                    <div class="avatar-option selected" data-color="#00F3FF" style="background: #00F3FF;"></div>
+                    <div class="avatar-option" data-color="#FF00FF" style="background: #FF00FF;"></div>
+                    <div class="avatar-option" data-color="#00FF88" style="background: #00FF88;"></div>
+                    <div class="avatar-option" data-color="#FF8800" style="background: #FF8800;"></div>
+                    <div class="avatar-option" data-color="#8888FF" style="background: #8888FF;"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div class="controls">
-        <input type="file" id="pdf-upload" accept=".pdf" style="display:none">
-        <button onclick="document.getElementById('pdf-upload').click()">SUBIR PDF</button>
-        <button id="mic-btn" onmousedown="ptt(true)" onmouseup="ptt(false)">HABLAR (PTT)</button>
-        <button onclick="resetView()">RESET CAM</button>
-    </div>
-</div>
+    <!-- SVG Icons -->
+    <svg style="display: none;">
+        <symbol id="mic-icon" viewBox="0 0 24 24">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 2h2v2h-2v-2zm0 4h2v2h-2v-2zm-5-8h2v2H6v-2zm0 4h2v2H6v-2zm12-4h2v2h-2v-2zm0 4h2v2h-2v-2zm-7 4h2v2h-2v-2z"/>
+        </symbol>
+        <symbol id="camera-icon" viewBox="0 0 24 24">
+            <path d="M12 15.2c1.76 0 3.2-1.44 3.2-3.2V4.8c0-1.76-1.44-3.2-3.2-3.2S8.8 3.04 8.8 4.8v7.2c0 1.76 1.44 3.2 3.2 3.2zm6-9.2h2l2-3h-4l2 3zm4 10c0 2.21-1.79 4-4 4H6c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4h12c2.21 0 4 1.79 4 4v10z"/>
+        </symbol>
+        <symbol id="screen-icon" viewBox="0 0 24 24">
+            <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
+        </symbol>
+        <symbol id="participants-icon" viewBox="0 0 24 24">
+            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
+        </symbol>
+    </svg>
 
-<canvas id="pdf-canvas"></canvas>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/controls/PointerLockControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/webxr/VRButton.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-<script>
-    let scene, camera, renderer, dashboard, audioAmbience;
-    const urlParams = new URLSearchParams(window.location.search);
-    let roomId = urlParams.get('room') || 'VIP-' + Math.random().toString(36).substr(2, 5).toUpperCase();
-    if(!urlParams.get('room')) window.history.pushState({}, '', `?room=${roomId}`);
+        let scene, camera, renderer, controls, dashboard, avatars = [], chairs = [];
+        let state = {
+            roomId: new URLSearchParams(window.location.search).get('room') || Math.random().toString(36).substring(2, 10),
+            participants: [{id: 'self', isSpeaking: false, avatarColor: 0x00F3FF, chairIndex: null}],
+            currentMode: 'youtube',
+            youtubeVideoId: null,
+            pdfDoc: null,
+            currentSlide: 1,
+            totalSlides: 1,
+            selectedAvatarColor: 0x00F3FF,
+            micStream: null,
+            audioContext: null,
+            isTalking: false,
+            isMuted: true
+        };
 
-    function init() {
-        scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x010103, 0.04);
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x020212);
+            scene.fog = new THREE.FogExp2(0x020212, 0.05);
 
-        camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.7, 7);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.6, 5);
 
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        document.body.appendChild(renderer.domElement);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            renderer.xr.enabled = true;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        // --- SONIDO AMBIENTAL ---
-        const listener = new THREE.AudioListener();
-        camera.add(listener);
-        audioAmbience = new THREE.Audio(listener);
+            document.body.appendChild(VRButton.createButton(renderer));
 
-        // Oscilador para crear sonido "Sci-Fi" sin archivos externos
-        const audioCtx = THREE.AudioContext.getContext();
-        const oscillator = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        oscillator.type = 'sine';
-        oscillator.frequency.setValueAtTime(50, audioCtx.currentTime); // Zumbido bajo
-        gain.gain.setValueAtTime(0.01, audioCtx.currentTime);
-        oscillator.connect(gain);
-        gain.connect(audioCtx.destination);
-        oscillator.start();
+            controls = new THREE.PointerLockControls(camera, renderer.domElement);
+            scene.add(controls.getObject());
 
-        // --- ILUMINACIÓN DINÁMICA ---
-        const mainLight = new THREE.RectAreaLight(0x00f3ff, 5, 10, 10);
-        mainLight.position.set(0, 5, -2);
-        scene.add(mainLight);
+            // Bright professional lighting for photorealism
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+            scene.add(ambientLight);
 
-        // Suelo de espejo pulido
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(40, 40),
-            new THREE.MeshStandardMaterial({ color: 0x050505, metalness: 1, roughness: 0.1 })
-        );
-        floor.rotation.x = -Math.PI / 2;
-        scene.add(floor);
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x4444ff, 1.5);
+            scene.add(hemiLight);
 
-        // Mesa de Juntas
-        const table = new THREE.Mesh(
-            new THREE.BoxGeometry(6, 0.1, 3),
-            new THREE.MeshStandardMaterial({ color: 0x0a0a0a, metalness: 1, roughness: 0.2 })
-        );
-        table.position.y = 0.8;
-        scene.add(table);
+            const pointLight = new THREE.PointLight(0xffffff, 8, 50);
+            pointLight.position.set(0, 5, 0);
+            pointLight.castShadow = true;
+            pointLight.shadow.mapSize.width = 2048;
+            pointLight.shadow.mapSize.height = 2048;
+            scene.add(pointLight);
 
-        // Pantalla Dashboard
-        dashboard = new THREE.Mesh(
-            new THREE.PlaneGeometry(7, 4),
-            new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.2, side: THREE.DoubleSide })
-        );
-        dashboard.position.set(0, 2.8, -5);
-        scene.add(dashboard);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+            dirLight.position.set(5, 10, 5);
+            dirLight.castShadow = true;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 50;
+            scene.add(dirLight);
 
-        // Generar 10 Sillas
-        for(let i=0; i<10; i++) {
-            const chairGroup = new THREE.Group();
-            const mat = new THREE.MeshStandardMaterial({color: 0x050505});
-            const seat = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.1,0.7), mat);
-            const back = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.9,0.1), mat);
-            back.position.set(0, 0.45, -0.35);
-            chairGroup.add(seat, back);
+            createConferenceRoom();
+            addParticles();
 
-            const angle = (i / 10) * Math.PI * 2;
-            chairGroup.position.set(Math.cos(angle)*4.5, 0, Math.sin(angle)*4.5);
-            chairGroup.lookAt(0, 0, 0);
-            scene.add(chairGroup);
+            document.getElementById('roomId').textContent = `Room ID: ${state.roomId}`;
+            window.history.replaceState(null, '', `?room=${state.roomId}`);
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                    document.getElementById(btn.dataset.tab + 'Tab').classList.add('active');
+                    state.currentMode = btn.dataset.tab;
+                });
+            });
+
+            document.getElementById('loadVideo').addEventListener('click', () => {
+                const input = document.getElementById('youtubeUrl').value;
+                const videoId = extractYouTubeId(input);
+                if (videoId) {
+                    state.youtubeVideoId = videoId;
+                    updateDashboard('youtube');
+                }
+            });
+
+            document.getElementById('loadPdf').addEventListener('click', async () => {
+                const file = document.getElementById('pdfFile').files[0];
+                if (file) {
+                    const arrayBuffer = await file.arrayBuffer();
+                    state.pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    state.totalSlides = state.pdfDoc.numPages;
+                    state.currentSlide = 1;
+                    updateSlideCounter();
+                    updateDashboard('pdf');
+                }
+            });
+
+            document.getElementById('prevSlide').addEventListener('click', () => {
+                if (state.currentSlide > 1) state.currentSlide--;
+                updateSlideCounter();
+                updateDashboard('pdf');
+            });
+            document.getElementById('nextSlide').addEventListener('click', () => {
+                if (state.currentSlide < state.totalSlides) state.currentSlide++;
+                updateSlideCounter();
+                updateDashboard('pdf');
+            });
+
+            document.querySelectorAll('.avatar-option').forEach(option => {
+                option.addEventListener('click', () => {
+                    document.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
+                    option.classList.add('selected');
+                    state.selectedAvatarColor = parseInt(option.dataset.color.replace('#', '0x'), 16);
+                    updateSelfAvatar();
+                });
+            });
+
+            // Mic setup with mute toggle
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                state.micStream = stream;
+                state.audioContext = new AudioContext();
+                state.isMuted = true;
+                updateMicButton();
+            }).catch(err => {
+                console.log('Microphone access denied:', err);
+            });
+
+            document.getElementById('micBtn').addEventListener('click', () => {
+                if (state.micStream) {
+                    state.isMuted = !state.isMuted;
+                    state.micStream.getAudioTracks().forEach(track => {
+                        track.enabled = !state.isMuted;
+                    });
+                    updateMicButton();
+                }
+            });
+
+            function updateMicButton() {
+                const btn = document.getElementById('micBtn');
+                if (state.isMuted) {
+                    btn.classList.add('muted');
+                    btn.classList.remove('active');
+                } else {
+                    btn.classList.remove('muted');
+                    btn.classList.add('active');
+                }
+            }
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === ' ' && !state.isMuted && !state.isTalking) {
+                    state.isTalking = true;
+                    document.getElementById('pttIndicator').classList.add('active');
+                    state.participants[0].isSpeaking = true;
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                if (e.key === ' ') {
+                    state.isTalking = false;
+                    document.getElementById('pttIndicator').classList.remove('active');
+                    state.participants[0].isSpeaking = false;
+                }
+            });
+
+            renderer.domElement.addEventListener('click', onClickSit);
+
+            // Mock multiplayer
+            setInterval(() => {
+                if (state.participants.length < 10 && Math.random() > 0.8) {
+                    addMockParticipant();
+                }
+                document.getElementById('participantCount').textContent = `${state.participants.length} participants`;
+            }, 5000);
+
+            window.addEventListener('resize', onWindowResize);
+            renderer.setAnimationLoop(animate);
         }
 
-        document.getElementById('session-id').innerText = roomId;
-        updateClock();
-        setInterval(updateClock, 1000);
-        animate();
-    }
+        function createConferenceRoom() {
+            // Floor with wood texture
+            const loader = new THREE.TextureLoader();
+            const floorTexture = loader.load('https://threejs.org/examples/textures/floor_wood.jpg');
+            floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
+            floorTexture.repeat.set(4, 4);
+            const floorGeometry = new THREE.CircleGeometry(8, 64);
+            const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.6, metalness: 0.1 });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
 
-    // LÓGICA DE PDF A TEXTURA
-    document.getElementById('pdf-upload').addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        const reader = new FileReader();
-        reader.onload = async function() {
-            const pdf = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
-            const page = await pdf.getPage(1);
-            const canvas = document.getElementById('pdf-canvas');
-            const context = canvas.getContext('2d');
-            const viewport = page.getViewport({ scale: 2 });
-            canvas.width = viewport.width; canvas.height = viewport.height;
-            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            // Table with metal texture
+            const tableTexture = loader.load('https://threejs.org/examples/textures/metal.jpg');
+            const tableGeometry = new THREE.CylinderGeometry(3, 3, 0.2, 64);
+            const tableMaterial = new THREE.MeshStandardMaterial({ map: tableTexture, roughness: 0.3, metalness: 0.8 });
+            const table = new THREE.Mesh(tableGeometry, tableMaterial);
+            table.position.y = 1;
+            table.castShadow = true;
+            table.receiveShadow = true;
+            scene.add(table);
 
-            new THREE.TextureLoader().load(canvas.toDataURL(), (tex) => {
-                dashboard.material.map = tex;
-                dashboard.material.opacity = 1;
+            // Dashboard screen
+            const screenGeometry = new THREE.PlaneGeometry(4, 3);
+            const screenMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+            dashboard = new THREE.Mesh(screenGeometry, screenMaterial);
+            dashboard.position.set(0, 2.5, -3.5);
+            dashboard.rotation.y = Math.PI;
+            scene.add(dashboard);
+
+            // 10 Chairs
+            for (let i = 0; i < 10; i++) {
+                const angle = (i / 10) * Math.PI * 2;
+                const x = Math.cos(angle) * 4;
+                const z = Math.sin(angle) * 4;
+                const chairGroup = new THREE.Group();
+                const seatGeometry = new THREE.BoxGeometry(0.8, 0.2, 0.8);
+                const seatTexture = loader.load('https://threejs.org/examples/textures/fabric.jpg');
+                const seatMaterial = new THREE.MeshStandardMaterial({ map: seatTexture, roughness: 0.7, metalness: 0 });
+                const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+                seat.position.y = 1;
+                chairGroup.add(seat);
+
+                const backGeometry = new THREE.BoxGeometry(0.8, 1, 0.2);
+                const back = new THREE.Mesh(backGeometry, seatMaterial);
+                back.position.set(0, 1.5, -0.3);
+                chairGroup.add(back);
+
+                chairGroup.position.set(x, 0, z);
+                chairGroup.rotation.y = angle + Math.PI;
+                chairGroup.castShadow = true;
+                chairGroup.receiveShadow = true;
+                scene.add(chairGroup);
+                chairs.push(chairGroup);
+
+                const avatar = createAvatar(0xffffff);
+                avatar.visible = false;
+                avatar.position.set(x, 1.2, z);
+                avatar.rotation.y = angle + Math.PI;
+                scene.add(avatar);
+                avatars.push(avatar);
+            }
+        }
+
+        function createAvatar(color) {
+            const group = new THREE.Group();
+            const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 1, 32);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.2 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            group.add(body);
+
+            const headGeometry = new THREE.SphereGeometry(0.25, 32, 32);
+            const head = new THREE.Mesh(headGeometry, bodyMaterial);
+            head.position.y = 0.6;
+            group.add(head);
+
+            const ringGeometry = new THREE.TorusGeometry(0.4, 0.05, 16, 100);
+            const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x00F3FF, transparent: true, opacity: 0.5 });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.rotation.x = Math.PI / 2;
+            group.add(ring);
+
+            return group;
+        }
+
+        function updateSelfAvatar() {
+            if (avatars[0]) {
+                avatars[0].children[0].material.color.set(state.selectedAvatarColor);
+                avatars[0].children[1].material.color.set(state.selectedAvatarColor);
+            }
+        }
+
+        function addParticles() {
+            const particles = 500;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particles * 3);
+            for (let i = 0; i < particles; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 20;
+                positions[i * 3 + 1] = Math.random() * 10;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 20;
+            }
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const material = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.05, transparent: true });
+            const particleSystem = new THREE.Points(geometry, material);
+            scene.add(particleSystem);
+        }
+
+        function extractYouTubeId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : url;
+        }
+
+        function updateDashboard(mode) {
+            if (mode === 'youtube' && state.youtubeVideoId) {
+                const video = document.createElement('video');
+                video.src = `https://www.youtube.com/embed/${state.youtubeVideoId}?autoplay=1`;
+                video.crossOrigin = 'anonymous';
+                video.play();
+                const texture = new THREE.VideoTexture(video);
+                dashboard.material.map = texture;
                 dashboard.material.needsUpdate = true;
+            } else if (mode === 'pdf' && state.pdfDoc) {
+                renderPdfPage(state.currentSlide);
+            }
+        }
+
+        async function renderPdfPage(pageNum) {
+            const page = await state.pdfDoc.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const renderContext = { canvasContext: canvas.getContext('2d'), viewport };
+            await page.render(renderContext).promise;
+            const texture = new THREE.CanvasTexture(canvas);
+            dashboard.material.map = texture;
+            dashboard.material.needsUpdate = true;
+        }
+
+        function updateSlideCounter() {
+            document.getElementById('slideCounter').textContent = `Slide ${state.currentSlide} / ${state.totalSlides}`;
+        }
+
+        function onClickSit(event) {
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(chairs, true);
+            if (intersects.length > 0) {
+                const chairIndex = chairs.findIndex(chair => {
+                    return intersects.some(intersect => intersect.object.parent === chair || chair.children.includes(intersect.object));
+                });
+                if (chairIndex !== -1 && avatars[chairIndex] && !avatars[chairIndex].visible) {
+                    avatars[chairIndex].visible = true;
+                    avatars[chairIndex].children[0].material.color.set(state.selectedAvatarColor);
+                    avatars[chairIndex].children[1].material.color.set(state.selectedAvatarColor);
+                    state.participants[0].chairIndex = chairIndex;
+                    camera.position.set(chairs[chairIndex].position.x, 1.6, chairs[chairIndex].position.z + 0.5);
+                    controls.lock();
+                }
+            }
+        }
+
+        function addMockParticipant() {
+            const freeChair = chairs.findIndex((c, i) => avatars[i] && !avatars[i].visible);
+            if (freeChair !== -1 && avatars[freeChair]) {
+                avatars[freeChair].visible = true;
+                const randomColor = Math.random() * 0xffffff;
+                avatars[freeChair].children[0].material.color.set(randomColor);
+                avatars[freeChair].children[1].material.color.set(randomColor);
+                state.participants.push({id: Math.random().toString(36).substring(2), isSpeaking: false, avatarColor: randomColor, chairIndex: freeChair});
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            avatars.forEach((avatar, i) => {
+                if (avatar && state.participants[i] && state.participants[i].isSpeaking) {
+                    avatar.scale.set(1 + Math.sin(Date.now() / 100) * 0.05, 1 + Math.sin(Date.now() / 100) * 0.05, 1 + Math.sin(Date.now() / 100) * 0.05);
+                } else if (avatar) {
+                    avatar.scale.set(1, 1, 1);
+                }
             });
-        };
-        reader.readAsArrayBuffer(file);
-    });
 
-    function updateClock() {
-        const d = new Date();
-        document.getElementById('utc-clock').innerText = "UTC: " + d.getUTCHours().toString().padStart(2,'0') + ":" + d.getUTCMinutes().toString().padStart(2,'0') + ":" + d.getUTCSeconds().toString().padStart(2,'0');
-    }
+            renderer.render(scene, camera);
+        }
 
-    function ptt(on) {
-        document.getElementById('mic-btn').style.background = on ? "#ff3e3e" : "#00f3ff";
-    }
-
-    function resetView() { camera.position.set(0, 1.7, 7); camera.lookAt(0, 1.5, 0); }
-
-    function animate() {
-        requestAnimationFrame(animate);
-        dashboard.position.y = 2.8 + Math.sin(Date.now()*0.0015)*0.08; // Flotación suave
-        renderer.render(scene, camera);
-    }
-
-    window.onload = init;
-</script>
+        init();
+    </script>
 </body>
 </html>
