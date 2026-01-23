@@ -225,12 +225,18 @@
             document.getElementById('loadPdf').addEventListener('click', async () => {
                 const file = document.getElementById('pdfFile').files[0];
                 if (file) {
-                    const arrayBuffer = await file.arrayBuffer();
-                    state.pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                    state.totalSlides = state.pdfDoc.numPages;
-                    state.currentSlide = 1;
-                    updateSlideCounter();
-                    updateDashboard('pdf');
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        state.pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                        state.totalSlides = state.pdfDoc.numPages;
+                        state.currentSlide = 1;
+                        updateSlideCounter();
+                        updateDashboard('pdf');
+                    } catch (err) {
+                        console.error('Error cargando PDF:', err);
+                        dashboard.material.color.set(0xff0000); // Rojo para indicar error
+                        dashboard.material.opacity = 0.8;
+                    }
                 }
             });
 
@@ -337,9 +343,9 @@
             table.receiveShadow = true;
             scene.add(table);
 
-            // Dashboard screen
+            // Dashboard screen - visible initially with cyan tint
             const screenGeometry = new THREE.PlaneGeometry(4, 3);
-            const screenMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+            const screenMaterial = new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
             dashboard = new THREE.Mesh(screenGeometry, screenMaterial);
             dashboard.position.set(0, 2.5, -3.5);
             dashboard.rotation.y = Math.PI;
@@ -443,16 +449,21 @@
         }
 
         async function renderPdfPage(pageNum) {
-            const page = await state.pdfDoc.getPage(pageNum);
-            const viewport = page.getViewport({ scale: 1.5 });
-            const canvas = document.createElement('canvas');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            const renderContext = { canvasContext: canvas.getContext('2d'), viewport };
-            await page.render(renderContext).promise;
-            const texture = new THREE.CanvasTexture(canvas);
-            dashboard.material.map = texture;
-            dashboard.material.needsUpdate = true;
+            try {
+                const page = await state.pdfDoc.getPage(pageNum);
+                const viewport = page.getViewport({ scale: 1.5 });
+                const canvas = document.createElement('canvas');
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                const renderContext = { canvasContext: canvas.getContext('2d'), viewport };
+                await page.render(renderContext).promise;
+                const texture = new THREE.CanvasTexture(canvas);
+                dashboard.material.map = texture;
+                dashboard.material.needsUpdate = true;
+            } catch (err) {
+                console.error('Error renderizando PDF:', err);
+                dashboard.material.color.set(0xff0000);
+            }
         }
 
         function updateSlideCounter() {
