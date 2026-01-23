@@ -451,13 +451,31 @@
         async function renderPdfPage(pageNum) {
             try {
                 const page = await state.pdfDoc.getPage(pageNum);
-                const viewport = page.getViewport({ scale: 1.5 });
+
+                // High-resolution PDF rendering (scale 2.5 for HD quality)
+                const scale = 2.5;
+                const viewport = page.getViewport({ scale: scale });
+
+                // Create canvas with DevicePixelRatio support for retina/HD screens
+                const outputScale = window.devicePixelRatio || 1;
                 const canvas = document.createElement('canvas');
-                canvas.width = viewport.width;
-                canvas.height = viewport.height;
-                const renderContext = { canvasContext: canvas.getContext('2d'), viewport };
-                await page.render(renderContext).promise;
+                canvas.width = Math.floor(viewport.width * outputScale);
+                canvas.height = Math.floor(viewport.height * outputScale);
+                canvas.style.width = Math.floor(viewport.width) + 'px';
+                canvas.style.height = Math.floor(viewport.height) + 'px';
+
+                console.log('Canvas size:', canvas.width, 'x', canvas.height);
+
+                const context = canvas.getContext('2d');
+                const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+                await page.render({ canvasContext: context, transform: transform, viewport: viewport }).promise;
+
+                // High-quality texture with better filters
                 const texture = new THREE.CanvasTexture(canvas);
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
                 dashboard.material.map = texture;
                 dashboard.material.needsUpdate = true;
             } catch (err) {
