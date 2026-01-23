@@ -17,174 +17,64 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
 
     <style>
-        * { box-sizing: border-box; }
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            background: #0a0a0f; 
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            color: #e0e0e0;
-        }
-
-        /* Pantalla de Entrada */
-        #entry-screen {
-            position: fixed; inset: 0; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 1000;
+        :root { --neon: #00f3ff; --neon-red: #ff3333; --bg: #020205; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: var(--bg); font-family: 'Courier New', monospace; color: var(--neon); }
+        
+        /* HUD Estilo Minimax (Holográfico) */
+        #hud { 
+            position: fixed; inset: 0; pointer-events: none; padding: 25px; z-index: 100;
+            display: flex; flex-direction: column; justify-content: space-between;
         }
         
-        #entry-screen.hidden { display: none; }
-
-        .entry-logo {
-            font-size: 48px; font-weight: 300; letter-spacing: 8px; color: #00d4ff;
-            margin-bottom: 10px; text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+        /* Capa de Scanlines (Líneas de monitor antiguo) */
+        #scanlines {
+            position: fixed; inset: 0; pointer-events: none; z-index: 200;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.15) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.02), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.02));
+            background-size: 100% 3px, 3px 100%;
         }
 
-        .entry-subtitle {
-            font-size: 14px; color: #888; letter-spacing: 4px; margin-bottom: 40px;
+        .panel { 
+            background: rgba(0, 10, 20, 0.8); border: 1px solid var(--neon); 
+            padding: 15px; backdrop-filter: blur(10px); pointer-events: auto;
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.1); border-radius: 2px;
+            text-transform: uppercase; font-size: 11px;
         }
 
+        .top-bar { display: flex; justify-content: space-between; align-items: flex-start; }
+        #timer-display { font-size: 32px; font-weight: bold; text-shadow: 0 0 15px var(--neon); margin: 5px 0; }
+        
+        button { 
+            background: transparent; color: var(--neon); border: 1px solid var(--neon); 
+            padding: 6px 12px; cursor: pointer; font-family: inherit; font-weight: bold;
+            transition: 0.2s; margin: 2px;
+        }
+        button:hover { background: var(--neon); color: #000; box-shadow: 0 0 15px var(--neon); }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        
+        #chat-box { width: 300px; height: 220px; display: flex; flex-direction: column; }
+        #messages { flex: 1; overflow-y: auto; font-size: 10px; margin-bottom: 10px; padding: 5px; scrollbar-width: none; }
+        input { background: rgba(0,0,0,0.6); border: 1px solid #004444; color: #fff; padding: 8px; width: 100%; font-family: inherit; }
+        input:focus { border-color: var(--neon); outline: none; }
+
+        #welcome {
+            position: fixed; inset: 0; background: #000; z-index: 1000;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .welcome-content {
+            text-align: center; padding: 40px; border: 1px solid var(--neon);
+            background: rgba(0, 10, 20, 0.9);
+        }
+        .welcome-content h1 { letter-spacing: 5px; margin-bottom: 15px; font-size: 28px; }
+        .welcome-content p { opacity: 0.6; margin-bottom: 30px; font-size: 12px; }
+        
         .entry-info {
             background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
-            padding: 20px 40px; border-radius: 8px; margin-bottom: 30px; text-align: center;
+            padding: 15px 25px; margin-bottom: 25px; display: inline-block;
         }
-
-        .entry-info label { display: block; font-size: 11px; color: #666; letter-spacing: 1px; margin-bottom: 5px; }
-        .entry-info .session-id { font-size: 24px; font-weight: 600; color: #00d4ff; }
-
-        .entry-btn {
-            background: linear-gradient(135deg, #00d4ff, #0099cc);
-            border: none; color: #000; padding: 18px 60px; font-size: 14px; font-weight: 600;
-            letter-spacing: 2px; cursor: pointer; border-radius: 4px;
-            transition: all 0.3s; text-transform: uppercase;
-        }
-        .entry-btn:hover {
-            transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0, 212, 255, 0.4);
-        }
-
-        .entry-footer {
-            position: absolute; bottom: 20px; font-size: 11px; color: #444; letter-spacing: 1px;
-        }
-
-        /* HUD Principal */
-        #hud {
-            position: fixed; inset: 0; pointer-events: none; padding: 20px; z-index: 100;
-            display: none; flex-direction: column; justify-content: space-between;
-        }
-
-        #hud.active { display: flex; }
-
-        .hud-top {
-            display: flex; justify-content: space-between; align-items: flex-start;
-        }
-
-        .status-panel {
-            background: rgba(10, 15, 25, 0.9); border: 1px solid rgba(0, 212, 255, 0.3);
-            padding: 15px 20px; border-radius: 4px; backdrop-filter: blur(10px);
-            min-width: 200px;
-        }
-
-        .status-row {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .status-row:last-child { border-bottom: none; }
-
-        .status-label { font-size: 10px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
-        .status-value { font-size: 13px; color: #00d4ff; font-weight: 500; }
-
-        .timer-panel {
-            background: rgba(10, 15, 25, 0.9); border: 1px solid rgba(0, 212, 255, 0.3);
-            padding: 15px 25px; border-radius: 4px; text-align: center;
-            backdrop-filter: blur(10px);
-        }
-
-        .timer-display {
-            font-size: 36px; font-weight: 300; color: #00d4ff; 
-            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5); margin-bottom: 10px;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .timer-controls { display: flex; gap: 5px; justify-content: center; }
-
-        .timer-btn {
-            background: transparent; border: 1px solid rgba(0, 212, 255, 0.3); color: #888;
-            padding: 5px 12px; font-size: 10px; cursor: pointer; border-radius: 3px;
-            transition: all 0.2s; letter-spacing: 1px;
-        }
-        .timer-btn:hover { border-color: #00d4ff; color: #00d4ff; }
-
-        .hud-bottom {
-            display: flex; justify-content: space-between; align-items: flex-end;
-        }
-
-        .controls-panel {
-            background: rgba(10, 15, 25, 0.9); border: 1px solid rgba(0, 212, 255, 0.3);
-            padding: 15px 20px; border-radius: 4px; backdrop-filter: blur(10px);
-            display: flex; gap: 15px; align-items: center;
-        }
-
-        .control-btn {
-            background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3);
-            color: #00d4ff; padding: 10px 18px; font-size: 11px; cursor: pointer;
-            border-radius: 3px; transition: all 0.2s; letter-spacing: 1px;
-            white-space: nowrap;
-        }
-        .control-btn:hover {
-            background: rgba(0, 212, 255, 0.2); border-color: #00d4ff;
-        }
-        .control-btn.active {
-            background: rgba(0, 212, 255, 0.3); border-color: #00d4ff;
-        }
-        .control-btn.danger {
-            border-color: rgba(255, 80, 80, 0.5); color: #ff5050;
-        }
-        .control-btn.danger:hover { background: rgba(255, 80, 80, 0.2); }
-
-        .divider {
-            width: 1px; height: 30px; background: rgba(255,255,255,0.1);
-        }
-
-        .audio-controls { display: flex; gap: 5px; }
-
-        .audio-btn {
-            padding: 10px 15px; font-size: 11px; cursor: pointer; border-radius: 3px;
-            transition: all 0.2s; letter-spacing: 1px;
-        }
-        .audio-btn.mute {
-            background: rgba(255, 80, 80, 0.1); border: 1px solid rgba(255, 80, 80, 0.3);
-            color: #ff5050;
-        }
-        .audio-btn.speak {
-            background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3);
-            color: #00d4ff;
-        }
-        .audio-btn:hover { opacity: 0.8; }
-
-        .chat-panel {
-            background: rgba(10, 15, 25, 0.9); border: 1px solid rgba(0, 212, 255, 0.3);
-            padding: 15px; border-radius: 4px; backdrop-filter: blur(10px);
-            width: 300px; max-height: 200px; display: flex; flex-direction: column;
-        }
-
-        .chat-messages {
-            flex: 1; overflow-y: auto; margin-bottom: 10px; font-size: 11px;
-        }
-        .chat-messages::-webkit-scrollbar { width: 4px; }
-        .chat-messages::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.3); }
-
-        .chat-message {
-            padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .chat-message .time { color: #555; font-size: 10px; margin-right: 8px; }
-        .chat-message .user { color: #00d4ff; font-weight: 500; margin-right: 5px; }
-
-        .chat-input {
-            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
-            color: #e0e0e0; padding: 8px 12px; font-size: 11px; border-radius: 3px;
-            outline: none; width: 100%;
-        }
-        .chat-input:focus { border-color: rgba(0, 212, 255, 0.3); }
+        .entry-info label { display: block; font-size: 10px; color: #666; margin-bottom: 5px; }
+        .entry-info .session-id { font-size: 24px; font-weight: bold; color: var(--neon); }
 
         /* Indicador de hablando */
         .speaking-indicator {
@@ -202,116 +92,97 @@
         .youtube-active .webgl-canvas { pointer-events: none !important; }
         .youtube-active .css3d-canvas { pointer-events: auto !important; }
 
-        /* Mensaje de video bloqueado */
-        .yt-blocked-message {
-            position: absolute; inset: 0; background: rgba(20, 20, 25, 0.95);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: #ff5050; text-align: center; padding: 30px; border-radius: 8px;
-        }
-        .yt-blocked-message h3 { color: #ff5050; margin-bottom: 15px; }
-        .yt-blocked-message p { color: #888; max-width: 400px; line-height: 1.6; margin-bottom: 20px; }
-        .yt-blocked-message button {
-            background: #ff5050; border: none; color: #fff; padding: 10px 25px;
-            border-radius: 3px; cursor: pointer; letter-spacing: 1px;
-        }
-
         #pdf-canvas { display: none; }
         #file-input { display: none; }
     </style>
 </head>
 <body>
 
-<!-- Pantalla de Entrada -->
-<div id="entry-screen">
-    <div class="entry-logo">HoloMeet VR</div>
-    <div class="entry-subtitle">PROFESSIONAL OFFICE</div>
-    
-    <div class="entry-info">
-        <label>COMPARTE</label>
-        <div class="session-id" id="session-display">---</div>
-    </div>
-    
-    <button class="entry-btn" onclick="enterRoom()">ENTRAR</button>
-    
-    <div class="entry-footer">Created by MiniMax Agent</div>
-</div>
+<div id="scanlines"></div>
 
-<!-- HUD Principal -->
-<div id="hud">
-    <div class="hud-top">
-        <div class="status-panel">
-            <div class="status-row">
-                <span class="status-label">SESSION</span>
-                <span class="status-value" id="session-value">---</span>
-            </div>
-            <div class="status-row">
-                <span class="status-label">UTC</span>
-                <span class="status-value" id="utc-time">00:00:00</span>
-            </div>
-            <div class="status-row">
-                <span class="status-label">PARTICIPANTS</span>
-                <span class="status-value" id="participant-count">1</span>
-            </div>
+<div id="welcome">
+    <div class="welcome-content">
+        <h1>HoloMeet VR</h1>
+        <p>PROFESSIONAL OFFICE</p>
+        
+        <div class="entry-info">
+            <label>COMPARTE</label>
+            <div class="session-id" id="session-display">---</div>
         </div>
-
-        <div class="timer-panel">
-            <div class="timer-display" id="timer-display">00:00</div>
-            <div class="timer-controls">
-                <button class="timer-btn" onclick="setTimer(5)">5M</button>
-                <button class="timer-btn" onclick="setTimer(10)">10M</button>
-                <button class="timer-btn" onclick="setTimer(15)">15M</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="hud-bottom">
-        <div class="controls-panel">
-            <button class="control-btn" onclick="toggleMic()">
-                <span id="mic-status">SILENCIADO</span>
-            </button>
-            
-            <div class="audio-controls">
-                <button class="audio-btn mute" id="push-talk" onmousedown="startTalking()" onmouseup="stopTalking()" onmouseleave="stopTalking()">
-                    HABLAR (PTT)
-                </button>
-            </div>
-
-            <div class="divider"></div>
-
-            <button class="control-btn" onclick="document.getElementById('file-input').click()">
-                SUBIR PDF
-            </button>
-            <input type="file" id="file-input" accept=".pdf" onchange="loadPDF(event)">
-
-            <div class="divider"></div>
-
-            <button class="control-btn" onclick="prevPage()">◀</button>
-            <span id="page-display" style="color: #00d4ff; font-size: 12px; min-width: 60px; text-align: center;">---</span>
-            <button class="control-btn" onclick="nextPage()">▶</button>
-
-            <div class="divider"></div>
-
-            <button class="control-btn" onclick="playPause()">▶</button>
-            <button class="control-btn" onclick="resetCamera()">RESET CAM</button>
-        </div>
-
-        <div class="chat-panel">
-            <div class="chat-messages" id="chat-messages"></div>
-            <input type="text" class="chat-input" id="chat-input" placeholder="Escribe un mensaje..." onkeypress="handleChat(event)">
-        </div>
+        
+        <br>
+        <button onclick="startSession()" style="padding: 15px 40px;">ENTRAR</button>
+        
+        <p style="margin-top: 30px; font-size: 10px; color: #444;">Created by MiniMax Agent</p>
     </div>
 </div>
 
+<div id="hud" style="display:none;">
+    <div class="top-bar">
+        <div class="panel">
+            <div id="status-text" style="color: #555;">SALA VIRTUAL</div>
+            <div id="room-id" style="font-size: 18px; color: #fff;">SESSION: ---</div>
+            <div id="utc-time" style="margin-top: 5px; font-size: 10px; color: #666;"></div>
+            <div id="user-count" style="margin-top: 5px;">CONECTANDO...</div>
+        </div>
+        
+        <div class="panel" style="text-align:center; min-width: 150px;">
+            <div style="font-size: 9px; opacity: 0.5;">CONTROL DE TURNO</div>
+            <div id="timer-display">00:00</div>
+            <div style="display:flex; justify-content:center; gap:5px; margin-top: 8px;">
+                <button onclick="setTimer(5)">5M</button>
+                <button onclick="setTimer(10)">10M</button>
+                <button onclick="setTimer(15)">15M</button>
+            </div>
+        </div>
+
+        <div id="chat-box" class="panel">
+            <div id="messages"></div>
+            <input type="text" id="chat-input" placeholder="ESCRIBIR MENSAJE...">
+        </div>
+    </div>
+
+    <div class="controls panel" style="display:flex; align-items: center; justify-content: center; gap: 25px; flex-wrap: wrap;">
+        <div>
+            <button onclick="toggleMic()" id="mic-btn">SILENCIADO</button>
+        </div>
+        
+        <div style="border-left: 1px solid #004444; padding-left: 20px;">
+            <button onclick="document.getElementById('file-input').click()">SUBIR PDF</button>
+            <input type="file" id="file-input" accept=".pdf" style="display:none" onchange="loadPDF(event)">
+        </div>
+        
+        <div style="display:flex; align-items:center; border-left: 1px solid #004444; padding-left: 20px;">
+            <button onclick="prevPage()">◀</button>
+            <span id="page-num" style="margin: 0 20px; font-weight: bold; min-width: 80px; text-align:center;">---</span>
+            <button onclick="nextPage()">▶</button>
+        </div>
+
+        <div style="display:flex; gap:10px; border-left: 1px solid #004444; padding-left: 20px;">
+            <input type="text" id="yt-url" placeholder="YOUTUBE URL" style="width:120px; font-size: 10px;">
+            <button onclick="loadVideo()">▶ YT</button>
+        </div>
+
+        <div style="border-left: 1px solid #004444; padding-left: 20px;">
+            <button onclick="playPause()">▶</button>
+            <button onclick="resetCamera()">RESET CAM</button>
+        </div>
+
+        <button onclick="exportLog()" style="border-color: var(--neon-red); color: var(--neon-red);">LOG</button>
+    </div>
+</div>
+
+<div id="container"></div>
 <canvas id="pdf-canvas"></canvas>
 
 <script>
-    // === VARIABLES GLOBALES ===
-    let scene, camera, renderer, composer, cssRenderer, dashboard, laserPoint;
-    let peer, myConn, isHost = false, clientConns = [];
+    // --- VARIABLES GLOBALES ---
+    let scene, camera, renderer, composer, cssRenderer, dashboard, laser;
+    let peer, myConn, isHost = false, clients = [];
     let remoteAvatars = {};
     let pdfDoc = null, pageNum = 1, pdfPages = 1;
-    let logs = [], timeLeft = 0;
-    let audioContext = null, audioStream = null, isMuted = true, isTalking = false;
+    let timeLeft = 0, logs = [];
+    let audioContext = null, audioStream = null, isMuted = true;
     let youtubeVideoId = null, isYouTubeActive = false;
     let isPlaying = false;
 
@@ -320,15 +191,15 @@
     const roomName = urlParams.get('room') || 'MAIN';
     const ROOM_ID = 'HM-OFFICE-' + roomName;
 
-    // === INICIALIZACIÓN ===
-    function enterRoom() {
-        document.getElementById('entry-screen').classList.add('hidden');
-        document.getElementById('hud').classList.add('active');
+    // --- INICIALIZACIÓN ---
+    function startSession() {
+        document.getElementById('welcome').style.display = 'none';
+        document.getElementById('hud').style.display = 'flex';
         document.getElementById('session-display').textContent = roomName;
-        document.getElementById('session-value').textContent = roomName;
+        document.getElementById('room-id').textContent = 'SESSION: ' + roomName;
         
         unlockAudio();
-        init3D();
+        initApp();
     }
 
     async function unlockAudio() {
@@ -343,27 +214,27 @@
         }
     }
 
-    function init3D() {
+    // --- INICIALIZACIÓN VISUAL (EL "SECRETO" DEL LINK) ---
+    function initApp() {
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a0f);
-        scene.fog = new THREE.Fog(0x0a0a0f, 8, 40);
+        scene.background = new THREE.Color(0x020205);
+        scene.fog = new THREE.Fog(0x020205, 2, 30);
 
         camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.7, 8);
+        camera.position.set(0, 1.8, 7.5);
 
         renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.0;
+        renderer.toneMappingExposure = 1.3;
         renderer.domElement.classList.add('webgl-canvas');
         renderer.domElement.style.position = 'absolute';
         renderer.domElement.style.top = '0';
         renderer.domElement.style.pointerEvents = 'none';
-        document.body.appendChild(renderer.domElement);
+        document.getElementById('container').appendChild(renderer.domElement);
 
+        // CSS3D Renderer para YouTube
         cssRenderer = new THREE.CSS3DRenderer();
         cssRenderer.setSize(window.innerWidth, window.innerHeight);
         cssRenderer.domElement.classList.add('css3d-canvas');
@@ -372,21 +243,68 @@
         cssRenderer.domElement.style.pointerEvents = 'none';
         document.body.appendChild(cssRenderer.domElement);
 
-        // Post-procesamiento Bloom
-        const renderScene = new THREE.RenderPass(scene, camera);
+        // --- COMPOSER (BLOOM / RESPLANDOR) ---
+        const renderPass = new THREE.RenderPass(scene, camera);
         const bloomPass = new THREE.UnrealBloomPass(
-            new THREE.Vector2(window.innerWidth, window.innerHeight),
-            0.8, 0.4, 0.85
+            new THREE.Vector2(window.innerWidth, window.innerHeight), 
+            1.5, 0.4, 0.85
         );
-        bloomPass.threshold = 0.3;
-        bloomPass.strength = 0.6;
+        bloomPass.threshold = 0.2;
+        bloomPass.strength = 1.0;
         bloomPass.radius = 0.5;
 
         composer = new THREE.EffectComposer(renderer);
-        composer.addPass(renderScene);
+        composer.addPass(renderPass);
         composer.addPass(bloomPass);
 
-        createRoom();
+        // --- MATERIALES FÍSICOS (REFLEJOS) ---
+        const floorMat = new THREE.MeshPhysicalMaterial({ 
+            color: 0x000000, metalness: 0.9, roughness: 0.1, 
+            clearcoat: 1.0, clearcoatRoughness: 0.05, reflectivity: 1.0 
+        });
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), floorMat);
+        floor.rotation.x = -Math.PI/2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Dashboard (Pantalla)
+        dashboard = new THREE.Mesh(
+            new THREE.PlaneGeometry(6.4, 3.6),
+            new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.1, side: THREE.DoubleSide })
+        );
+        dashboard.position.set(0, 2.6, -4);
+        scene.add(dashboard);
+
+        // Marco de la pantalla
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.8, roughness: 0.2 });
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(6.8, 4.0, 0.1), frameMat);
+        frame.position.set(0, 2.6, -4.1);
+        scene.add(frame);
+
+        // Láser (Brillante)
+        laser = new THREE.Mesh(new THREE.SphereGeometry(0.04), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+        laser.visible = false;
+        scene.add(laser);
+
+        // --- Sala Profesional ---
+        createProfessionalRoom();
+
+        // --- LUZ ---
+        scene.add(new THREE.HemisphereLight(0x00f3ff, 0x000000, 0.5));
+        const pLight = new THREE.PointLight(0x00f3ff, 1, 20);
+        pLight.position.set(0, 5, 0);
+        scene.add(pLight);
+        
+        // Luz principal
+        const mainLight = new THREE.SpotLight(0xffffff, 1, 20, Math.PI/5, 0.3);
+        mainLight.position.set(0, 7, 0);
+        mainLight.target.position.set(0, 0, 0);
+        scene.add(mainLight);
+        scene.add(mainLight.target);
+
+        // Partículas
+        createParticles();
+
         setupNetwork();
         setupInteractions();
         animate();
@@ -394,244 +312,111 @@
         addLog('SYSTEM', 'Sala profesional inicializada');
     }
 
-    // === CREACIÓN DE LA SALA PROFESIONAL ===
-    function createRoom() {
-        // Suelo de madera
-        const floorTexture = createWoodTexture();
-        const floorMat = new THREE.MeshStandardMaterial({ 
-            map: floorTexture,
-            roughness: 0.4,
-            metalness: 0.1
-        });
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        floor.receiveShadow = true;
-        scene.add(floor);
-
+    function createProfessionalRoom() {
         // Paredes
         const wallMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.8 });
         
         // Pared trasera
-        const backWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 8), wallMat);
-        backWall.position.set(0, 4, -10);
+        const backWall = new THREE.Mesh(new THREE.PlaneGeometry(40, 10), wallMat);
+        backWall.position.set(0, 5, -15);
         scene.add(backWall);
 
         // Paredes laterales
-        const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(20, 8), wallMat);
-        leftWall.rotation.y = Math.PI / 2;
-        leftWall.position.set(-15, 4, 0);
+        const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
+        leftWall.rotation.y = Math.PI/2;
+        leftWall.position.set(-20, 5, 0);
         scene.add(leftWall);
 
-        const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(20, 8), wallMat);
-        rightWall.rotation.y = -Math.PI / 2;
-        rightWall.position.set(15, 4, 0);
+        const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
+        rightWall.rotation.y = -Math.PI/2;
+        rightWall.position.set(20, 5, 0);
         scene.add(rightWall);
 
         // Techo
         const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x0f0f15, roughness: 0.9 });
-        const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(30, 20), ceilingMat);
-        ceiling.rotation.x = Math.PI / 2;
-        ceiling.position.set(0, 8, 0);
+        const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(40, 30), ceilingMat);
+        ceiling.rotation.x = Math.PI/2;
+        ceiling.position.set(0, 10, 0);
         scene.add(ceiling);
-
-        // Pantalla de presentación
-        dashboard = new THREE.Mesh(
-            new THREE.PlaneGeometry(5, 3),
-            new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.1 })
-        );
-        dashboard.position.set(0, 3, -9.5);
-        scene.add(dashboard);
-
-        // Marco de la pantalla
-        const frameMat = new THREE.MeshStandardMaterial({ color: 0x222233, metalness: 0.8, roughness: 0.2 });
-        const frame = new THREE.Mesh(new THREE.BoxGeometry(5.4, 3.4, 0.1), frameMat);
-        frame.position.set(0, 3, -9.6);
-        scene.add(frame);
 
         // Mesa de conferencias
         createConferenceTable();
 
-        // Sillas ejecutivas
-        createExecutiveChairs();
+        // Sillas
+        createChairs();
 
-        // Iluminación profesional
-        setupLighting();
-
-        // Puntero láser
-        laserPoint = new THREE.Mesh(
-            new THREE.SphereGeometry(0.03),
-            new THREE.MeshBasicMaterial({ color: 0xff3333 })
+        // Barra de luz LED en el techo
+        const ledBar = new THREE.Mesh(
+            new THREE.BoxGeometry(15, 0.1, 0.1),
+            new THREE.MeshBasicMaterial({ color: 0x00f3ff })
         );
-        laserPoint.visible = false;
-        scene.add(laserPoint);
-
-        // Partículas ambientales
-        createParticles();
-    }
-
-    function createWoodTexture() {
-        const canvas = document.createElement('canvas');
-        canvas.width = 512; canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        
-        // Fondo madera oscura
-        ctx.fillStyle = '#2a2520';
-        ctx.fillRect(0, 0, 512, 512);
-        
-        // Líneas de madera
-        ctx.strokeStyle = '#3a3530';
-        ctx.lineWidth = 2;
-        for(let i = 0; i < 50; i++) {
-            ctx.beginPath();
-            ctx.moveTo(0, Math.random() * 512);
-            ctx.bezierCurveTo(
-                150, Math.random() * 512,
-                350, Math.random() * 512,
-                512, Math.random() * 512
-            );
-            ctx.stroke();
-        }
-        
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(4, 4);
-        return texture;
+        ledBar.position.set(0, 9.5, -3);
+        scene.add(ledBar);
     }
 
     function createConferenceTable() {
-        const tableMat = new THREE.MeshStandardMaterial({ 
-            color: 0x1a1410, 
-            roughness: 0.3, 
-            metalness: 0.1 
-        });
+        const tableMat = new THREE.MeshStandardMaterial({ color: 0x1a1410, roughness: 0.3 });
+        const metalMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.2 });
 
-        // Tablero de la mesa
-        const tableTop = new THREE.Mesh(
-            new THREE.BoxGeometry(4, 0.1, 2),
-            tableMat
-        );
+        // Tablero
+        const tableTop = new THREE.Mesh(new THREE.BoxGeometry(4, 0.1, 2), tableMat);
         tableTop.position.set(0, 0.8, 0);
         tableTop.castShadow = true;
-        tableTop.receiveShadow = true;
         scene.add(tableTop);
 
-        // Patas de la mesa
-        const legMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.2 });
-        const legPositions = [
-            [-1.8, 0.4, -0.8], [1.8, 0.4, -0.8],
-            [-1.8, 0.4, 0.8], [1.8, 0.4, 0.8]
-        ];
-        
+        // Patas
+        const legPositions = [[-1.8, -0.8], [1.8, -0.8], [-1.8, 0.8], [1.8, 0.8]];
         legPositions.forEach(pos => {
-            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 16), legMat);
-            leg.position.set(...pos);
+            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 16), metalMat);
+            leg.position.set(pos[0], 0.4, pos[1]);
             leg.castShadow = true;
             scene.add(leg);
         });
     }
 
-    function createExecutiveChairs() {
+    function createChairs() {
         const chairMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 });
         const metalMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.9, roughness: 0.2 });
 
         const chairPositions = [
-            { x: -1.2, z: 2, rotY: 0 },
-            { x: 0, z: 2.5, rotY: 0 },
-            { x: 1.2, z: 2, rotY: 0 },
-            { x: -1.5, z: 1.2, rotY: 0.3 },
-            { x: 1.5, z: 1.2, rotY: -0.3 },
-            { x: -1.2, z: -1.5, rotY: Math.PI },
-            { x: 0, z: -1.8, rotY: Math.PI },
-            { x: 1.2, z: -1.5, rotY: Math.PI }
+            { x: -1.2, z: 2, rot: 0 },
+            { x: 0, z: 2.5, rot: 0 },
+            { x: 1.2, z: 2, rot: 0 },
+            { x: -1.5, z: 1.2, rot: 0.3 },
+            { x: 1.5, z: 1.2, rot: -0.3 },
+            { x: -1.2, z: -1.5, rot: Math.PI },
+            { x: 0, z: -1.8, rot: Math.PI },
+            { x: 1.2, z: -1.5, rot: Math.PI }
         ];
 
         chairPositions.forEach(pos => {
             const chair = createChair(chairMat, metalMat);
             chair.position.set(pos.x, 0, pos.z);
-            chair.rotation.y = pos.rotY;
+            chair.rotation.y = pos.rot;
             scene.add(chair);
         });
     }
 
     function createChair(paddingMat, metalMat) {
         const group = new THREE.Group();
-
-        // Asiento
-        const seat = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, 0.08, 0.5),
-            paddingMat
-        );
+        
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.08, 0.5), paddingMat);
         seat.position.y = 0.5;
         group.add(seat);
-
-        // Respaldo
-        const backrest = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, 0.6, 0.06),
-            paddingMat
-        );
+        
+        const backrest = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.6, 0.06), paddingMat);
         backrest.position.set(0, 0.85, -0.22);
         group.add(backrest);
-
-        // Base
-        const base = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.25, 0.25, 0.05, 16),
-            metalMat
-        );
+        
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.05, 16), metalMat);
         base.position.y = 0.025;
         group.add(base);
-
-        // Columna
-        const column = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.03, 0.03, 0.45, 8),
-            metalMat
-        );
+        
+        const column = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.45, 8), metalMat);
         column.position.y = 0.275;
         group.add(column);
-
-        // Ruedas (simplificado)
-        for(let i = 0; i < 5; i++) {
-            const wheel = new THREE.Mesh(
-                new THREE.SphereGeometry(0.03),
-                metalMat
-            );
-            const angle = (i / 5) * Math.PI * 2;
-            wheel.position.set(Math.cos(angle) * 0.2, 0.03, Math.sin(angle) * 0.2);
-            group.add(wheel);
-        }
-
+        
         return group;
-    }
-
-    function setupLighting() {
-        // Luz ambiental
-        const ambient = new THREE.AmbientLight(0x404050, 0.4);
-        scene.add(ambient);
-
-        // Luz principal (lámpara de la sala)
-        const mainLight = new THREE.SpotLight(0xffffff, 1.5, 15, Math.PI/4, 0.3);
-        mainLight.position.set(0, 7, 0);
-        mainLight.castShadow = true;
-        mainLight.shadow.mapSize.width = 2048;
-        mainLight.shadow.mapSize.height = 2048;
-        scene.add(mainLight);
-        scene.add(mainLight.target);
-        mainLight.target.position.set(0, 0, 0);
-
-        // Luces de acento cian
-        const rectLight = new THREE.RectAreaLight(0x00d4ff, 2, 8, 4);
-        rectLight.position.set(0, 5, -8);
-        rectLight.lookAt(0, 2, 0);
-        scene.add(rectLight);
-
-        // Luces de punto
-        const pointLight1 = new THREE.PointLight(0x00d4ff, 0.3, 10);
-        pointLight1.position.set(-5, 3, -5);
-        scene.add(pointLight1);
-
-        const pointLight2 = new THREE.PointLight(0x00d4ff, 0.3, 10);
-        pointLight2.position.set(5, 3, -5);
-        scene.add(pointLight2);
     }
 
     function createParticles() {
@@ -639,16 +424,16 @@
         const positions = new Float32Array(particleCount * 3);
         
         for(let i = 0; i < particleCount * 3; i += 3) {
-            positions[i] = (Math.random() - 0.5) * 20;
-            positions[i + 1] = Math.random() * 6 + 1;
-            positions[i + 2] = (Math.random() - 0.5) * 20;
+            positions[i] = (Math.random() - 0.5) * 25;
+            positions[i + 1] = Math.random() * 8 + 1;
+            positions[i + 2] = (Math.random() - 0.5) * 25;
         }
         
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         
         const material = new THREE.PointsMaterial({
-            color: 0x00d4ff,
+            color: 0x00f3ff,
             size: 0.02,
             transparent: true,
             opacity: 0.4,
@@ -659,22 +444,17 @@
         particles.userData.velocities = [];
         
         for(let i = 0; i < particleCount; i++) {
-            particles.userData.velocities.push({
-                y: Math.random() * 0.002,
-                x: (Math.random() - 0.5) * 0.001,
-                z: (Math.random() - 0.5) * 0.001
-            });
+            particles.userData.velocities.push({ y: Math.random() * 0.002, x: 0, z: 0 });
         }
         
         scene.add(particles);
         scene.userData.particles = particles;
     }
 
-    // === SISTEMA DE AVATARES ===
+    // --- AVATARES ---
     function createAvatarMesh(id, color, name) {
         const group = new THREE.Group();
         
-        // Cuerpo
         const body = new THREE.Mesh(
             new THREE.CylinderGeometry(0.15, 0.18, 0.7, 16),
             new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.3 })
@@ -682,7 +462,6 @@
         body.position.y = 0.35;
         group.add(body);
         
-        // Cabeza
         const head = new THREE.Mesh(
             new THREE.SphereGeometry(0.12, 16, 16),
             new THREE.MeshStandardMaterial({ color: 0xddc8a8, roughness: 0.6 })
@@ -700,15 +479,15 @@
         group.add(speakingIndicator);
         group.userData.speakingIndicator = speakingIndicator;
         
-        // Etiqueta con nombre
+        // Nombre
         const canvas = document.createElement('canvas');
         canvas.width = 200; canvas.height = 36;
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
         ctx.roundRect(0, 0, 200, 36, 4);
         ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 14px Arial';
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 14px Courier New';
         ctx.textAlign = 'center';
         ctx.fillText(name, 100, 24);
         
@@ -723,10 +502,10 @@
 
     function updateRemoteAvatar(id, data) {
         if(!remoteAvatars[id]) {
-            const avatar = createAvatarMesh(id, data.color || '#00d4ff', data.name || 'Usuario');
+            const avatar = createAvatarMesh(id, data.color || '#00f3ff', data.name || 'Usuario');
             scene.add(avatar);
             remoteAvatars[id] = avatar;
-            updateParticipantCount();
+            updateCount();
             addLog('RED', `${data.name || 'Usuario'} se unió`);
         }
         
@@ -739,67 +518,62 @@
         }
     }
 
-    function updateParticipantCount() {
-        const count = Object.keys(remoteAvatars).length + 1;
-        document.getElementById('participant-count').textContent = count;
-    }
-
-    // === RED ===
+    // --- LÓGICA DE RED (STAR TOPOLOGY) ---
     function setupNetwork() {
         peer = new Peer(ROOM_ID);
 
         peer.on('open', () => {
             isHost = true;
-            addLog('RED', 'Sala creada. Esperando participantes...');
+            document.getElementById('status-text').innerText = 'MODERADOR (HOST)';
+            document.getElementById('status-text').style.color = '#00ff00';
+            addLog('RED', 'Servidor de sala activo.');
         });
 
         peer.on('error', (err) => {
             if(err.type === 'unavailable-id') {
                 isHost = false;
-                connectAsGuest(ROOM_ID);
+                document.getElementById('status-text').innerText = 'INVITADO (CLIENT)';
+                connectToHost(ROOM_ID);
             } else {
                 addLog('ERROR', `Red: ${err.type}`);
             }
         });
 
-        peer.on('connection', (conn) => {
-            setupConnEvents(conn);
+        peer.on('connection', conn => {
+            setupConn(conn);
             if(isHost) {
-                clientConns.push(conn);
-                updateParticipantCount();
+                clients.push(conn);
+                updateCount();
                 addLog('RED', 'Participante conectado.');
             }
         });
     }
 
-    function connectAsGuest(hostId) {
-        const guestPeer = new Peer();
-        guestPeer.on('open', () => {
-            myConn = guestPeer.connect(hostId);
-            setupConnEvents(myConn);
+    function connectToHost(id) {
+        const p = new Peer();
+        p.on('open', () => {
+            myConn = p.connect(id);
+            setupConn(myConn);
             addLog('RED', 'Conectando como invitado...');
         });
     }
 
-    function setupConnEvents(conn) {
-        conn.on('open', () => {
+    function setupConn(c) {
+        c.on('open', () => {
             addLog('RED', 'Conectado a la sala');
             broadcast({ type: 'avatar-pos', x: camera.position.x, y: camera.position.y, z: camera.position.z, name: 'Participante' });
         });
         
-        conn.on('data', (data) => {
+        c.on('data', data => {
             handleData(data);
-            if(isHost) clientConns.forEach(c => { if(c.peer !== conn.peer) c.send(data); });
+            if(isHost) clients.forEach(cl => { if(cl.peer !== c.peer) cl.send(data); });
         });
         
-        conn.on('close', () => {
-            if(isHost) {
-                clientConns = clientConns.filter(c => c.peer !== conn.peer);
-                updateParticipantCount();
-            }
-            if(remoteAvatars[conn.peer]) {
-                scene.remove(remoteAvatars[conn.peer]);
-                delete remoteAvatars[conn.peer];
+        c.on('close', () => {
+            if(isHost) { clients = clients.filter(cl => cl.peer !== c.peer); updateCount(); }
+            if(remoteAvatars[c.peer]) {
+                scene.remove(remoteAvatars[c.peer]);
+                delete remoteAvatars[c.peer];
                 addLog('RED', 'Usuario desconectado');
             }
         });
@@ -807,21 +581,21 @@
 
     function broadcast(data) {
         handleData(data);
-        if(isHost) clientConns.forEach(c => c.send(data));
+        if(isHost) clients.forEach(cl => cl.send(data));
         else if(myConn) myConn.send(data);
     }
 
     function handleData(d) {
         switch(d.type) {
             case 'chat':
-                addChatMessage(d.user, d.text);
+                addLog(d.user, d.text);
                 break;
             case 'laser':
-                laserPoint.position.copy(d.pos);
-                laserPoint.visible = true;
+                laser.position.copy(d.pos);
+                laser.visible = true;
                 break;
             case 'laser-off':
-                laserPoint.visible = false;
+                laser.visible = false;
                 break;
             case 'pdf-img':
                 updateDashboard(d.img, d.page, d.total);
@@ -845,7 +619,11 @@
         }
     }
 
-    // === PDF ===
+    function updateCount() {
+        document.getElementById('user-count').innerText = `${clients.length + 1} PARTICIPANTES`;
+    }
+
+    // --- PDF HD ---
     async function loadPDF(event) {
         const file = event.target.files[0];
         if(!file) return;
@@ -856,8 +634,8 @@
                 pdfDoc = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
                 pageNum = 1;
                 pdfPages = pdfDoc.numPages;
-                await renderPage();
-                addLog('DOC', `PDF cargado: ${file.name} (${pdfPages} páginas)`);
+                await renderPDF();
+                addLog('DOC', `PDF: ${file.name} (${pdfPages} páginas)`);
                 showNotification(`PDF: ${file.name}`);
             } catch(e) {
                 addLog('ERROR', `PDF: ${e.message}`);
@@ -866,12 +644,12 @@
         reader.readAsArrayBuffer(file);
     }
 
-    async function renderPage() {
+    async function renderPDF() {
         if(!pdfDoc) return;
         const page = await pdfDoc.getPage(pageNum);
         const canvas = document.getElementById('pdf-canvas');
         const ctx = canvas.getContext('2d');
-        const viewport = page.getViewport({ scale: 2.5 });
+        const viewport = page.getViewport({ scale: 3.5 });
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         
@@ -887,23 +665,23 @@
             dashboard.material.map = tex;
             dashboard.material.opacity = 1;
             dashboard.material.needsUpdate = true;
-            document.getElementById('page-display').textContent = `${page}/${total || '---'}`;
+            document.getElementById('page-num').innerText = `${page}/${total || '---'}`;
         });
     }
 
     function prevPage() {
         if(!pdfDoc || pageNum <= 1) return;
         pageNum--;
-        renderPage();
+        renderPDF();
     }
 
     function nextPage() {
         if(!pdfDoc || pageNum >= pdfPages) return;
         pageNum++;
-        renderPage();
+        renderPDF();
     }
 
-    // === AUDIO ===
+    // --- AUDIO ---
     function toggleMic() {
         if(!navigator.mediaDevices) {
             showNotification("Audio requiere HTTPS");
@@ -914,24 +692,25 @@
             isMuted = !isMuted;
             audioStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
             
-            const btn = document.getElementById('mic-status');
+            const btn = document.getElementById('mic-btn');
             if(isMuted) {
                 btn.textContent = 'SILENCIADO';
-                document.querySelector('.control-btn').style.background = 'rgba(255, 80, 80, 0.2)';
-                document.querySelector('.control-btn').style.borderColor = 'rgba(255, 80, 80, 0.5)';
+                btn.style.background = 'transparent';
             } else {
-                btn.textContent = 'ACTIVO';
-                document.querySelector('.control-btn').style.background = 'rgba(0, 212, 255, 0.2)';
-                document.querySelector('.control-btn').style.borderColor = 'rgba(0, 212, 255, 0.5)';
+                btn.textContent = 'HABLAR';
+                btn.style.background = 'var(--neon)';
+                btn.style.color = '#000';
             }
+            
+            broadcast({ type: 'speaking', id: peer.id, isSpeaking: !isMuted });
         } else {
             navigator.mediaDevices.getUserMedia({ audio: true, echoCancellation: true, noiseSuppression: true })
                 .then(stream => {
                     audioStream = stream;
                     isMuted = false;
-                    document.getElementById('mic-status').textContent = 'ACTIVO';
-                    document.querySelector('.control-btn').style.background = 'rgba(0, 212, 255, 0.2)';
-                    document.querySelector('.control-btn').style.borderColor = 'rgba(0, 212, 255, 0.5)';
+                    document.getElementById('mic-btn').textContent = 'HABLAR';
+                    document.getElementById('mic-btn').style.background = 'var(--neon)';
+                    document.getElementById('mic-btn').style.color = '#000';
                     addLog('AUDIO', 'Micrófono activado');
                     showNotification('Micrófono activo');
                     setupVoiceDetection(stream);
@@ -939,22 +718,6 @@
                 .catch(e => {
                     addLog('ERROR', `Audio: ${e.message}`);
                 });
-        }
-    }
-
-    function startTalking() {
-        if(audioStream && !isMuted) {
-            isTalking = true;
-            document.getElementById('push-talk').classList.add('active');
-            broadcast({ type: 'speaking', id: peer.id, isSpeaking: true });
-        }
-    }
-
-    function stopTalking() {
-        if(isTalking) {
-            isTalking = false;
-            document.getElementById('push-talk').classList.remove('active');
-            broadcast({ type: 'speaking', id: peer.id, isSpeaking: false });
         }
     }
 
@@ -988,39 +751,27 @@
         detect();
     }
 
-    // === CHAT ===
-    function handleChat(event) {
-        if(event.key === 'Enter' && event.target.value.trim()) {
-            const text = event.target.value.trim();
-            broadcast({ type: 'chat', user: isHost ? 'HOST' : 'GUEST', text });
-            event.target.value = '';
+    // --- YOUTUBE ---
+    function loadVideo() {
+        const url = document.getElementById('yt-url').value.trim();
+        if(!url) return;
+        
+        const videoId = extractYouTubeId(url);
+        if(!videoId) {
+            addLog('ERROR', 'YouTube URL inválida');
+            return;
         }
+        
+        loadYouTubeVideo(videoId);
+        broadcast({ type: 'youtube', videoId });
+        addLog('VIDEO', `YouTube: ${videoId}`);
     }
 
-    function addChatMessage(user, text) {
-        const msg = document.createElement('div');
-        msg.className = 'chat-message';
-        const time = new Date().toLocaleTimeString();
-        msg.innerHTML = `<span class="time">${time}</span><span class="user">${user}:</span> ${text}`;
-        document.getElementById('chat-messages').appendChild(msg);
-        document.getElementById('chat-messages').scrollTop = 9999;
+    function extractYouTubeId(url) {
+        const match = url.match(/(?:youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=)([^#&?]*)/);
+        return match && match[1].length === 11 ? match[1] : null;
     }
 
-    // === TIMER ===
-    function setTimer(min) {
-        timeLeft = min * 60;
-        broadcast({ type: 'timer', sec: timeLeft });
-        addLog('TIMER', `${min} minutos`);
-    }
-
-    function updateTimerDisplay() {
-        const m = Math.floor(timeLeft / 60);
-        const s = timeLeft % 60;
-        document.getElementById('timer-display').textContent = 
-            `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-
-    // === YOUTUBE ===
     function loadYouTubeVideo(videoId) {
         youtubeVideoId = videoId;
         isYouTubeActive = false;
@@ -1036,7 +787,7 @@
         }
         
         const div = document.createElement('div');
-        div.style.cssText = 'width: 720px; height: 405px; background: #000; border-radius: 8px; overflow: hidden; position: relative;';
+        div.style.cssText = 'width: 720px; height: 405px; background: #000; border-radius: 8px; overflow: hidden;';
         
         const iframe = document.createElement('iframe');
         iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
@@ -1048,69 +799,92 @@
         
         const youtube3d = new THREE.CSS3DObject(div);
         youtube3d.name = 'youtube3d';
-        youtube3d.position.set(0, 3, -9.48);
+        youtube3d.position.set(0, 2.6, -3.98);
         youtube3d.scale.set(0.008, 0.008, 0.008);
         scene.add(youtube3d);
         
         isYouTubeActive = true;
         document.body.classList.add('youtube-active');
         
-        document.getElementById('page-display').textContent = 'VIDEO';
+        document.getElementById('page-num').textContent = 'VIDEO';
     }
 
-    // === UTILIDADES ===
+    // --- UTILIDADES ---
     function playPause() {
         isPlaying = !isPlaying;
         addLog('AUDIO', isPlaying ? 'Reproducción iniciada' : 'Pausado');
     }
 
     function resetCamera() {
-        camera.position.set(0, 1.7, 8);
+        camera.position.set(0, 1.8, 7.5);
         camera.rotation.set(0, 0, 0);
         addLog('SYSTEM', 'Cámara reiniciada');
     }
 
-    function addLog(type, msg) {
-        const t = new Date().toLocaleTimeString();
-        logs.push(`[${t}] ${type}: ${msg}`);
+    function setTimer(min) {
+        timeLeft = min * 60;
+        broadcast({ type: 'timer', sec: timeLeft });
+        addLog('TIMER', `${min} minutos`);
+    }
+
+    function updateTimerDisplay() {
+        const m = Math.floor(timeLeft / 60);
+        const s = Math.floor(timeLeft % 60);
+        document.getElementById('timer-display').innerText = `${m}:${s.toString().padStart(2,'0')}`;
+    }
+
+    function addLog(user, text) {
+        const div = document.createElement('div');
+        div.innerHTML = `<span style="color:var(--neon)">[${user}]</span> ${text}`;
+        document.getElementById('messages').appendChild(div);
+        document.getElementById('messages').scrollTop = 9999;
+        logs.push(`${new Date().toLocaleTimeString()} - ${user}: ${text}`);
+    }
+
+    function exportLog() {
+        const blob = new Blob([logs.join('\n')], {type: 'text/plain'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'AUDIT_LOG_SESSION.txt';
+        a.click();
+        addLog('LOG', 'Exportado');
     }
 
     function showNotification(msg) {
         const notif = document.createElement('div');
-        notif.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,212,255,0.95);color:#000;padding:15px 30px;border-radius:4px;font-weight:bold;z-index:200;';
+        notif.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,243,255,0.95);color:#000;padding:15px 30px;border-radius:4px;font-weight:bold;z-index:200;';
         notif.textContent = msg;
         document.body.appendChild(notif);
         setTimeout(() => notif.remove(), 2000);
     }
 
-    // === INTERACCIONES ===
+    // --- INTERACCIONES ---
     function setupInteractions() {
-        // Láser
-        window.addEventListener('mousemove', (e) => {
+        window.addEventListener('mousemove', e => {
             if(!pdfDoc && !youtubeVideoId) return;
             
-            const mouse = new THREE.Vector2(
-                (e.clientX / window.innerWidth) * 2 - 1,
-                -(e.clientY / window.innerHeight) * 2 + 1
-            );
-            
+            const mouse = new THREE.Vector2((e.clientX/window.innerWidth)*2-1, -(e.clientY/window.innerHeight)*2+1);
             const ray = new THREE.Raycaster();
             ray.setFromCamera(mouse, camera);
             const hits = ray.intersectObject(dashboard);
             
             if(hits.length > 0) {
-                const p = hits[0].point;
-                p.z += 0.02;
-                laserPoint.position.copy(p);
-                laserPoint.visible = true;
+                const p = hits[0].point; p.z += 0.05;
+                laser.position.copy(p); laser.visible = true;
                 broadcast({ type: 'laser', pos: p });
             } else {
-                laserPoint.visible = false;
+                laser.visible = false;
                 broadcast({ type: 'laser-off' });
             }
         });
 
-        // Redimensionar
+        document.getElementById('chat-input').addEventListener('keypress', e => {
+            if(e.key === 'Enter' && e.target.value) {
+                broadcast({ type: 'chat', user: isHost ? 'MOD' : 'USER', text: e.target.value });
+                e.target.value = '';
+            }
+        });
+
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -1118,31 +892,9 @@
             cssRenderer.setSize(window.innerWidth, window.innerHeight);
             composer.setSize(window.innerWidth, window.innerHeight);
         });
-
-        // Click en sala para mover
-        window.addEventListener('click', (e) => {
-            if(e.target.closest('#hud') || e.target.closest('#entry-screen')) return;
-            
-            const mouse = new THREE.Vector2(
-                (e.clientX / window.innerWidth) * 2 - 1,
-                -(e.clientY / window.innerHeight) * 2 + 1
-            );
-            
-            const ray = new THREE.Raycaster();
-            ray.setFromCamera(mouse, camera);
-            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-            const point = new THREE.Vector3();
-            
-            if(ray.ray.intersectPlane(plane, point)) {
-                if(point.x > -12 && point.x < 12 && point.z > -12 && point.z < 8) {
-                    camera.position.x = point.x;
-                    camera.position.z = point.z;
-                }
-            }
-        });
     }
 
-    // === LOOP PRINCIPAL ===
+    // --- LOOP PRINCIPAL ---
     setInterval(() => {
         // Actualizar avatar local
         if(isHost || myConn) {
@@ -1154,7 +906,7 @@
                 z: camera.position.z,
                 rotY: camera.rotation.y,
                 name: isHost ? 'HOST' : 'Participante',
-                isSpeaking: audioStream && !isMuted && isTalking
+                isSpeaking: audioStream && !isMuted
             });
         }
         
@@ -1169,7 +921,7 @@
         }
         
         // UTC
-        document.getElementById('utc-time').textContent = new Date().toISOString().substr(11, 8);
+        document.getElementById('utc-time').textContent = new Date().toISOString().substr(11, 8) + ' UTC';
         
         // Partículas
         if(scene.userData.particles) {
@@ -1177,7 +929,7 @@
             const positions = particles.geometry.attributes.position.array;
             particles.userData.velocities.forEach((v, i) => {
                 positions[i * 3 + 1] += v.y;
-                if(positions[i * 3 + 1] > 6) positions[i * 3 + 1] = 1;
+                if(positions[i * 3 + 1] > 8) positions[i * 3 + 1] = 1;
             });
             particles.geometry.attributes.position.needsUpdate = true;
         }
@@ -1185,9 +937,7 @@
 
     function animate() {
         requestAnimationFrame(animate);
-        
-        dashboard.position.y = 3 + Math.sin(Date.now() * 0.001) * 0.02;
-        
+        dashboard.position.y = 2.6 + Math.sin(Date.now() * 0.0012) * 0.03;
         composer.render(scene, camera);
         cssRenderer.render(scene, camera);
     }
