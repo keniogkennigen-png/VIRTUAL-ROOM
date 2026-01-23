@@ -1,0 +1,1717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloMeet VR - Holographic Conference Room</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Holographic UI Overlay */
+        .ui-overlay {
+            position: fixed;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .ui-overlay > * {
+            pointer-events: auto;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(180deg, rgba(5,5,16,0.95) 0%, rgba(5,5,16,0) 100%);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+        }
+
+        .room-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .room-id {
+            color: #00F3FF;
+            font-size: 14px;
+            background: rgba(0,243,255,0.1);
+            border: 1px solid rgba(0,243,255,0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .room-id:hover {
+            background: rgba(0,243,255,0.2);
+            box-shadow: 0 0 20px rgba(0,243,255,0.4);
+        }
+
+        .copy-icon {
+            margin-left: 8px;
+        }
+
+        .participant-count {
+            color: #fff;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .participant-count::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #00FF88;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Control Panel */
+        .control-panel {
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            padding: 15px 25px;
+            background: rgba(5,5,16,0.9);
+            border: 1px solid rgba(0,243,255,0.2);
+            border-radius: 50px;
+            backdrop-filter: blur(20px);
+        }
+
+        .control-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .control-btn.active {
+            background: rgba(0,243,255,0.2);
+            border-color: #00F3FF;
+            box-shadow: 0 0 20px rgba(0,243,255,0.3);
+        }
+
+        .control-btn.muted {
+            background: rgba(255,50,50,0.2);
+            border-color: #FF3232;
+        }
+
+        .control-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: #fff;
+        }
+
+        .control-btn.active svg {
+            fill: #00F3FF;
+        }
+
+        .control-btn.muted svg {
+            fill: #FF3232;
+        }
+
+        .control-btn.speaking svg {
+            fill: #00FF88;
+            filter: drop-shadow(0 0 10px #00FF88);
+        }
+
+        /* Push-to-Talk Indicator */
+        .ptt-indicator {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #00F3FF;
+            font-size: 14px;
+            padding: 8px 20px;
+            background: rgba(0,243,255,0.1);
+            border: 1px solid rgba(0,243,255,0.3);
+            border-radius: 20px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .ptt-indicator.active {
+            opacity: 1;
+        }
+
+        /* Right Panel - Dashboard Controls */
+        .dashboard-panel {
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            width: 280px;
+            padding: 20px;
+            background: rgba(5,5,16,0.9);
+            border: 1px solid rgba(112,0,255,0.3);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+        }
+
+        .panel-title {
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: #7000FF;
+            border-radius: 2px;
+        }
+
+        .dashboard-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.05);
+            color: #888;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: rgba(112,0,255,0.3);
+            color: #fff;
+            border: 1px solid rgba(112,0,255,0.5);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            color: #888;
+            font-size: 12px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .input-group input,
+        .input-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-size: 14px;
+            resize: none;
+        }
+
+        .input-group input:focus,
+        .input-group textarea:focus {
+            outline: none;
+            border-color: #7000FF;
+        }
+
+        .action-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, #7000FF, #00F3FF);
+            color: #fff;
+        }
+
+        .action-btn.secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(112,0,255,0.4);
+        }
+
+        /* Video Preview */
+        .video-preview {
+            width: 100%;
+            height: 120px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .video-preview iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* PDF Preview */
+        .pdf-preview {
+            width: 100%;
+            height: 120px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #888;
+            font-size: 12px;
+            border: 1px dashed rgba(255,255,255,0.2);
+        }
+
+        /* Slide Navigation */
+        .slide-nav {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .slide-nav span {
+            flex: 1;
+            text-align: center;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .nav-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover {
+            background: rgba(112,0,255,0.3);
+        }
+
+        /* Avatar Selection */
+        .avatar-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .avatar-options {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .avatar-option {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .avatar-option.selected {
+            border-color: #00F3FF;
+            box-shadow: 0 0 15px rgba(0,243,255,0.4);
+        }
+
+        .avatar-option:hover {
+            transform: scale(1.1);
+        }
+
+        /* Instructions */
+        .instructions {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
+            text-align: center;
+            padding: 10px 20px;
+            background: rgba(5,5,16,0.7);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* Chair Status Tooltip */
+        .chair-tooltip {
+            position: fixed;
+            padding: 8px 12px;
+            background: rgba(5,5,16,0.95);
+            border: 1px solid #00F3FF;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 200;
+        }
+
+        .chair-tooltip.visible {
+            opacity: 1;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #050510;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-logo {
+            font-size: 48px;
+            font-weight: 300;
+            color: #00F3FF;
+            margin-bottom: 30px;
+            text-shadow: 0 0 30px rgba(0,243,255,0.5);
+        }
+
+        .loading-bar {
+            width: 300px;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #7000FF, #00F3FF);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .loading-text {
+            color: rgba(255,255,255,0.5);
+            font-size: 14px;
+            margin-top: 20px;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            background: rgba(0,255,136,0.1);
+            border: 1px solid #00FF88;
+            border-radius: 10px;
+            color: #00FF88;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 300;
+        }
+
+        .notification.show {
+            opacity: 1;
+        }
+
+        /* Fullscreen Dashboard */
+        .dashboard-fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 500;
+            display: none;
+            flex-direction: column;
+        }
+
+        .dashboard-fullscreen.active {
+            display: flex;
+        }
+
+        .dashboard-header {
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .dashboard-title {
+            color: #fff;
+            font-size: 18px;
+        }
+
+        .close-dashboard {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .close-dashboard:hover {
+            background: rgba(255,50,50,0.3);
+        }
+
+        .dashboard-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dashboard-youtube-container {
+            width: 80%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(112,0,255,0.3);
+        }
+
+        .dashboard-youtube-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .dashboard-pdf-container {
+            width: 80%;
+            height: 80%;
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pdf-toolbar {
+            height: 50px;
+            background: #1a1a2e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .pdf-page-info {
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .pdf-canvas-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #333;
+        }
+
+        .pdf-canvas-wrapper canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-logo">HoloMeet VR</div>
+        <div class="loading-bar">
+            <div class="loading-progress" id="loadingProgress"></div>
+        </div>
+        <div class="loading-text">Initializing Holographic Environment...</div>
+    </div>
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay -->
+    <div class="ui-overlay top-bar">
+        <div class="room-info">
+            <div class="room-id" id="roomId">
+                <span id="roomLinkText">Room: HM-VR-2024-XK7M</span>
+                <span class="copy-icon">📋</span>
+            </div>
+        </div>
+        <div class="participant-count">
+            <span id="participantCount">3 participants</span>
+        </div>
+    </div>
+
+    <div class="instructions">
+        Click on chairs to sit • WASD to move • Mouse to look around • Space for Push-to-Talk
+    </div>
+
+    <div class="ui-overlay control-panel">
+        <button class="control-btn" id="micBtn" title="Microphone (Click to toggle)">
+            <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>
+        </button>
+        <button class="control-btn" id="pttModeBtn" title="Push-to-Talk Mode">
+            <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+        </button>
+        <button class="control-btn" id="cameraBtn" title="Camera">
+            <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+        </button>
+        <button class="control-btn" id="avatarBtn" title="Avatar">
+            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        </button>
+        <button class="control-btn" id="presentBtn" title="Present">
+            <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5-7l-3 3.72L9 13l-3 4h12l-4-5z"/></svg>
+        </button>
+        <button class="control-btn" id="settingsBtn" title="Settings">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </button>
+        <button class="control-btn" id="leaveBtn" title="Leave Room" style="background: rgba(255,50,50,0.2); border-color: #FF3232;">
+            <svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.68-1.36-2.66-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
+        </button>
+    </div>
+
+    <div class="ptt-indicator" id="pttIndicator">🎤 Push-to-Talk Active - Hold SPACE</div>
+
+    <div class="ui-overlay dashboard-panel">
+        <div class="panel-title">Holographic Dashboard</div>
+        
+        <div class="dashboard-tabs">
+            <button class="tab-btn active" data-tab="youtube">YouTube</button>
+            <button class="tab-btn" data-tab="pdf">PDF Slides</button>
+        </div>
+
+        <div class="tab-content active" id="youtubeTab">
+            <div class="input-group">
+                <label>Video URL or ID</label>
+                <input type="text" id="youtubeUrl" placeholder="YouTube URL or Video ID" value="">
+            </div>
+            <div class="video-preview" id="videoPreview">
+                <iframe id="youtubeEmbed" src="" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </div>
+            <button class="action-btn primary" id="loadVideo">Load Video on Dashboard</button>
+            <button class="action-btn secondary" id="shareVideo">Share Video Link</button>
+        </div>
+
+        <div class="tab-content" id="pdfTab">
+            <div class="input-group">
+                <label>PDF URL</label>
+                <input type="text" id="pdfUrl" placeholder="https://example.com/presentation.pdf" value="">
+            </div>
+            <div class="pdf-preview" id="pdfPreview">
+                <span>PDF Preview</span>
+            </div>
+            <div class="slide-nav">
+                <button class="nav-btn" id="prevSlide">◀</button>
+                <span id="slideCounter">Slide 1 / 1</span>
+                <button class="nav-btn" id="nextSlide">▶</button>
+            </div>
+            <button class="action-btn primary" id="loadPdf">Load PDF on Dashboard</button>
+            <button class="action-btn secondary" id="sharePdf">Share PDF Link</button>
+        </div>
+
+        <div class="avatar-section">
+            <div class="panel-title">Your Avatar</div>
+            <div class="avatar-options">
+                <div class="avatar-option selected" data-avatar="0" style="background: linear-gradient(135deg, #00F3FF, #7000FF);"></div>
+                <div class="avatar-option" data-avatar="1" style="background: linear-gradient(135deg, #FF6B6B, #FF8E53);"></div>
+                <div class="avatar-option" data-avatar="2" style="background: linear-gradient(135deg, #00FF88, #00F3FF);"></div>
+                <div class="avatar-option" data-avatar="3" style="background: linear-gradient(135deg, #FF8E53, #FF6B6B);"></div>
+                <div class="avatar-option" data-avatar="4" style="background: linear-gradient(135deg, #7000FF, #FF6B6B);"></div>
+            </div>
+            <button class="action-btn secondary" id="randomizeAvatar" style="margin-top: 15px;">🎲 Randomize Avatar</button>
+        </div>
+    </div>
+
+    <div class="chair-tooltip" id="chairTooltip">Click to sit</div>
+
+    <div class="notification" id="notification"></div>
+
+    <div class="dashboard-fullscreen" id="dashboardFullscreen">
+        <div class="dashboard-header">
+            <div class="dashboard-title" id="dashboardTitle">Holographic Dashboard</div>
+            <button class="close-dashboard" id="closeDashboard">✕</button>
+        </div>
+        <div class="dashboard-content" id="dashboardContent">
+            <!-- Content loaded dynamically -->
+        </div>
+    </div>
+
+    <!-- Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ============================================
+        // HoloMeet VR - Holographic Conference Room
+        // ============================================
+
+        // Global State
+        const state = {
+            roomId: 'HM-VR-2024-XK7M',
+            participants: [
+                { id: 1, name: 'You', avatar: 0, chair: null, isSpeaking: false },
+                { id: 2, name: 'Sarah Chen', avatar: 1, chair: 2, isSpeaking: true },
+                { id: 3, name: 'Marcus Webb', avatar: 2, chair: 5, isSpeaking: false }
+            ],
+            currentMode: 'youtube',
+            currentSlide: 1,
+            totalSlides: 1,
+            youtubeVideoId: null,
+            pdfUrl: null,
+            isMicOn: true,
+            isPttMode: false,
+            isPttActive: false,
+            selectedAvatar: 0,
+            isSitting: false,
+            currentChair: null,
+            cameraMode: 'free', // 'free' or 'seated'
+            presentationMode: null // 'youtube' or 'pdf'
+        };
+
+        // Three.js Components
+        let scene, camera, renderer, clock;
+        let chairs = [];
+        let avatars = [];
+        let dashboard;
+        let raycaster, mouse;
+        let hoverTimeout;
+
+        // Initialize
+        function init() {
+            // Loading simulation
+            simulateLoading();
+
+            // Setup Three.js scene
+            setupScene();
+            
+            // Create environment
+            createRoom();
+            createChairs();
+            createDashboard();
+            createAvatars();
+            createLighting();
+            createParticles();
+
+            // Setup controls
+            setupControls();
+            
+            // Setup UI
+            setupUI();
+            
+            // Start animation loop
+            animate();
+        }
+
+        function simulateLoading() {
+            const progressBar = document.getElementById('loadingProgress');
+            const loadingText = document.querySelector('.loading-text');
+            const steps = [
+                'Initializing Holographic Environment...',
+                'Loading 3D Assets...',
+                'Creating Conference Room...',
+                'Setting up Audio Systems...',
+                'Ready to Join!'
+            ];
+            
+            let currentStep = 0;
+            const interval = setInterval(() => {
+                const progress = ((currentStep + 1) / steps.length) * 100;
+                progressBar.style.width = progress + '%';
+                loadingText.textContent = steps[currentStep];
+                
+                if (currentStep >= steps.length - 1) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        document.getElementById('loadingScreen').classList.add('hidden');
+                    }, 500);
+                }
+                currentStep++;
+            }, 400);
+        }
+
+        function setupScene() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050510);
+            scene.fog = new THREE.FogExp2(0x050510, 0.015);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.6, 8);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Clock
+            clock = new THREE.Clock();
+
+            // Raycaster
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Window resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createRoom() {
+            // Floor - Holographic Grid
+            const floorGeometry = new THREE.PlaneGeometry(30, 30, 50, 50);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a1a2e,
+                metalness: 0.9,
+                roughness: 0.1,
+                wireframe: false
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Holographic Grid Overlay
+            const gridHelper = new THREE.GridHelper(30, 30, 0x00F3FF, 0x112233);
+            gridHelper.position.y = 0.01;
+            scene.add(gridHelper);
+
+            // Walls
+            const wallMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a1a2e,
+                metalness: 0.8,
+                roughness: 0.2,
+                side: THREE.DoubleSide
+            });
+
+            // Back Wall
+            const backWall = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 10),
+                wallMaterial
+            );
+            backWall.position.set(0, 5, -15);
+            backWall.receiveShadow = true;
+            scene.add(backWall);
+
+            // Side Walls
+            const leftWall = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 10),
+                wallMaterial
+            );
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.position.set(-15, 5, 0);
+            scene.add(leftWall);
+
+            const rightWall = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 10),
+                wallMaterial
+            );
+            rightWall.rotation.y = -Math.PI / 2;
+            rightWall.position.set(15, 5, 0);
+            scene.add(rightWall);
+
+            // Ceiling with glow
+            const ceiling = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 30),
+                new THREE.MeshStandardMaterial({
+                    color: 0x0a0a1a,
+                    metalness: 0.9,
+                    roughness: 0.1,
+                    emissive: 0x050510,
+                    emissiveIntensity: 0.5
+                })
+            );
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 10;
+            scene.add(ceiling);
+
+            // Holographic accent strips on walls
+            const stripGeometry = new THREE.BoxGeometry(0.1, 0.05, 30);
+            const stripMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00F3FF,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            for (let i = 0; i < 3; i++) {
+                const strip = new THREE.Mesh(stripGeometry, stripMaterial);
+                strip.position.set(-14.9, 2 + i * 2.5, 0);
+                scene.add(strip);
+
+                const strip2 = strip.clone();
+                strip2.position.set(14.9, 2 + i * 2.5, 0);
+                scene.add(strip2);
+            }
+        }
+
+        function createChairs() {
+            const chairPositions = [];
+            const radius = 6;
+            const startAngle = Math.PI * 0.3;
+            const endAngle = Math.PI * 0.7;
+
+            for (let i = 0; i < 10; i++) {
+                const angle = startAngle + (endAngle - startAngle) * (i / 9);
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius - 2;
+                chairPositions.push({ x, z, angle });
+            }
+
+            chairPositions.forEach((pos, index) => {
+                const chair = createSciFiChair(pos.x, pos.z, pos.angle);
+                chair.userData = { index, occupied: false };
+                chairs.push(chair);
+                scene.add(chair);
+            });
+        }
+
+        function createSciFiChair(x, z, angle) {
+            const chairGroup = new THREE.Group();
+
+            // Base
+            const baseGeometry = new THREE.CylinderGeometry(0.4, 0.5, 0.1, 32);
+            const baseMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2a2a4e,
+                metalness: 0.9,
+                roughness: 0.1
+            });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = 0.05;
+            base.castShadow = true;
+            chairGroup.add(base);
+
+            // Stem
+            const stemGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.4, 16);
+            const stemMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00F3FF,
+                metalness: 0.9,
+                roughness: 0.1,
+                emissive: 0x00F3FF,
+                emissiveIntensity: 0.3
+            });
+            const stem = new THREE.Mesh(stemGeometry, stemMaterial);
+            stem.position.y = 0.25;
+            chairGroup.add(stem);
+
+            // Seat
+            const seatGeometry = new THREE.BoxGeometry(0.5, 0.08, 0.5);
+            const seatMaterial = new THREE.MeshStandardMaterial({
+                color: 0x3a3a5e,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+            seat.position.y = 0.5;
+            seat.castShadow = true;
+            chairGroup.add(seat);
+
+            // Backrest
+            const backGeometry = new THREE.BoxGeometry(0.5, 0.4, 0.05);
+            const backMaterial = new THREE.MeshStandardMaterial({
+                color: 0x3a3a5e,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const back = new THREE.Mesh(backGeometry, backMaterial);
+            back.position.set(0, 0.75, -0.22);
+            back.rotation.x = -0.1;
+            back.castShadow = true;
+            chairGroup.add(back);
+
+            // Armrests
+            const armGeometry = new THREE.BoxGeometry(0.05, 0.02, 0.3);
+            const armMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00F3FF,
+                metalness: 0.9,
+                roughness: 0.1,
+                emissive: 0x00F3FF,
+                emissiveIntensity: 0.2
+            });
+
+            const arm1 = new THREE.Mesh(armGeometry, armMaterial);
+            arm1.position.set(0.25, 0.6, 0);
+            chairGroup.add(arm1);
+
+            const arm2 = new THREE.Mesh(armGeometry, armMaterial);
+            arm2.position.set(-0.25, 0.6, 0);
+            chairGroup.add(arm2);
+
+            // Position the entire chair
+            chairGroup.position.set(x, 0, z);
+            chairGroup.rotation.y = angle;
+
+            return chairGroup;
+        }
+
+        function createDashboard() {
+            dashboard = new THREE.Group();
+
+            // Main screen - curved holographic display
+            const screenGeometry = new THREE.CylinderGeometry(4, 4, 0.1, 64, 1, false, Math.PI * 0.8, Math.PI * 0.4);
+            const screenMaterial = new THREE.MeshStandardMaterial({
+                color: 0x000000,
+                metalness: 0.1,
+                roughness: 0.1,
+                emissive: 0x7000FF,
+                emissiveIntensity: 0.1,
+                transparent: true,
+                opacity: 0.95,
+                side: THREE.DoubleSide
+            });
+            const screen = new THREE.Mesh(screenGeometry, screenMaterial);
+            screen.rotation.z = Math.PI / 2;
+            screen.rotation.y = Math.PI / 2;
+            screen.position.y = 2;
+            dashboard.add(screen);
+
+            // Screen frame
+            const frameGeometry = new THREE.TorusGeometry(4, 0.1, 16, 64, Math.PI * 0.8);
+            const frameMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00F3FF,
+                metalness: 0.9,
+                roughness: 0.1,
+                emissive: 0x00F3FF,
+                emissiveIntensity: 0.5
+            });
+            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+            frame.rotation.z = Math.PI / 2;
+            frame.rotation.y = Math.PI / 0.5;
+            frame.position.y = 2;
+            dashboard.add(frame);
+
+            // Stand
+            const standGeometry = new THREE.CylinderGeometry(0.15, 0.2, 3, 32);
+            const standMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2a2a4e,
+                metalness: 0.9,
+                roughness: 0.1
+            });
+            const stand = new THREE.Mesh(standGeometry, standMaterial);
+            stand.position.y = -0.5;
+            stand.castShadow = true;
+            dashboard.add(stand);
+
+            // Base
+            const baseGeometry = new THREE.CylinderGeometry(0.8, 1, 0.15, 32);
+            const baseMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2a2a4e,
+                metalness: 0.9,
+                roughness: 0.1
+            });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = -2;
+            base.castShadow = true;
+            dashboard.add(base);
+
+            // Holographic edge glow
+            const glowGeometry = new THREE.CylinderGeometry(4.05, 4.05, 0.1, 64, 1, false, Math.PI * 0.8, Math.PI * 0.4);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0x7000FF,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            glow.rotation.z = Math.PI / 2;
+            glow.rotation.y = Math.PI / 2;
+            glow.position.y = 2.01;
+            dashboard.add(glow);
+
+            dashboard.position.set(0, 0, -8);
+            scene.add(dashboard);
+        }
+
+        function createAvatars() {
+            state.participants.forEach((participant, index) => {
+                const avatar = createAvatar(participant);
+                if (participant.chair !== null) {
+                    // Place avatar at their chair
+                    const chair = chairs[participant.chair];
+                    avatar.position.copy(chair.position);
+                    avatar.position.y = 0.5;
+                    avatar.rotation.y = chairs[participant.chair].rotation.y;
+                } else {
+                    // Random position for the player
+                    avatar.position.set(
+                        (Math.random() - 0.5) * 4,
+                        0,
+                        (Math.random() - 0.5) * 4 + 4
+                    );
+                }
+                avatars.push(avatar);
+                scene.add(avatar);
+            });
+        }
+
+        function createAvatar(participantData) {
+            const avatar = new THREE.Group();
+
+            // Body
+            const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.25, 0.7, 16);
+            const bodyMaterial = new THREE.MeshStandardMaterial({
+                color: participantData.avatar === 0 ? 0x00F3FF : 
+                       participantData.avatar === 1 ? 0xFF6B6B :
+                       participantData.avatar === 2 ? 0x00FF88 :
+                       participantData.avatar === 3 ? 0xFF8E53 : 0x7000FF,
+                metalness: 0.6,
+                roughness: 0.3
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 0.35;
+            avatar.add(body);
+
+            // Head
+            const headGeometry = new THREE.SphereGeometry(0.18, 32, 32);
+            const headMaterial = new THREE.MeshStandardMaterial({
+                color: participantData.avatar === 0 ? 0xFFE4C4 :
+                       participantData.avatar === 1 ? 0xFFDAB9 :
+                       participantData.avatar === 2 ? 0xF5DEB3 :
+                       participantData.avatar === 3 ? 0xDEB887 : 0xFFE4C4,
+                metalness: 0.3,
+                roughness: 0.7
+            });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.y = 0.95;
+            avatar.add(head);
+
+            // Holographic glow ring around avatar
+            const ringGeometry = new THREE.TorusGeometry(0.35, 0.02, 8, 32);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00F3FF,
+                transparent: true,
+                opacity: 0.6
+            });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0.1;
+            avatar.add(ring);
+
+            // Nametag
+            const nametagCanvas = document.createElement('canvas');
+            nametagCanvas.width = 256;
+            nametagCanvas.height = 64;
+            const ctx = nametagCanvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.roundRect(0, 0, 256, 64, 10);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(participantData.name, 128, 42);
+
+            const nametagTexture = new THREE.CanvasTexture(nametagCanvas);
+            const nametagMaterial = new THREE.SpriteMaterial({
+                map: nametagTexture,
+                transparent: true
+            });
+            const nametag = new THREE.Sprite(nametagMaterial);
+            nametag.scale.set(1, 0.25, 1);
+            nametag.position.y = 1.4;
+            avatar.add(nametag);
+
+            avatar.userData = participantData;
+
+            return avatar;
+        }
+
+        function createLighting() {
+            // Ambient light
+            const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+            scene.add(ambientLight);
+
+            // Main spotlight on dashboard
+            const mainSpotlight = new THREE.SpotLight(0x7000FF, 2);
+            mainSpotlight.position.set(0, 10, 0);
+            mainSpotlight.angle = Math.PI / 6;
+            mainSpotlight.penumbra = 0.5;
+            mainSpotlight.decay = 2;
+            mainSpotlight.distance = 30;
+            mainSpotlight.castShadow = true;
+            mainSpotlight.target = dashboard;
+            scene.add(mainSpotlight);
+
+            // Cyan accent lights
+            const accentLight1 = new THREE.PointLight(0x00F3FF, 1, 20);
+            accentLight1.position.set(-10, 5, 0);
+            scene.add(accentLight1);
+
+            const accentLight2 = new THREE.PointLight(0x00F3FF, 1, 20);
+            accentLight2.position.set(10, 5, 0);
+            scene.add(accentLight2);
+
+            // Fill light
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            fillLight.position.set(0, 10, 10);
+            scene.add(fillLight);
+        }
+
+        function createParticles() {
+            // Floating holographic particles
+            const particleCount = 200;
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 30;
+                positions[i * 3 + 1] = Math.random() * 10;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 30;
+
+                colors[i * 3] = 0;
+                colors[i * 3 + 1] = 0.95;
+                colors[i * 3 + 2] = 1;
+            }
+
+            const particleGeometry = new THREE.BufferGeometry();
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const particleMaterial = new THREE.PointsMaterial({
+                size: 0.05,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            particles.userData = { velocities: [] };
+            for (let i = 0; i < particleCount; i++) {
+                particles.userData.velocities.push({
+                    x: (Math.random() - 0.5) * 0.02,
+                    y: Math.random() * 0.02 + 0.01,
+                    z: (Math.random() - 0.5) * 0.02
+                });
+            }
+            scene.add(particles);
+        }
+
+        function setupControls() {
+            // Pointer Lock Controls (First Person)
+            const moveSpeed = 0.1;
+            const lookSpeed = 0.002;
+            const keys = {};
+            let isLocked = false;
+
+            // Mouse look
+            let yaw = 0;
+            let pitch = 0;
+
+            document.addEventListener('click', () => {
+                if (!isLocked && !state.isSitting) {
+                    renderer.domElement.requestPointerLock();
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                isLocked = document.pointerLockElement === renderer.domElement;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isLocked && !state.isSitting) {
+                    yaw -= e.movementX * lookSpeed;
+                    pitch -= e.movementY * lookSpeed;
+                    pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+                    camera.rotation.order = 'YXZ';
+                    camera.rotation.y = yaw;
+                    camera.rotation.x = pitch;
+                }
+            });
+
+            // Keyboard movement
+            document.addEventListener('keydown', (e) => {
+                keys[e.code] = true;
+                
+                // Push-to-talk
+                if (e.code === 'Space') {
+                    state.isPttActive = true;
+                    document.getElementById('pttIndicator').classList.add('active');
+                    document.getElementById('micBtn').classList.add('speaking');
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                keys[e.code] = false;
+                
+                // End push-to-talk
+                if (e.code === 'Space') {
+                    state.isPttActive = false;
+                    document.getElementById('pttIndicator').classList.remove('active');
+                    document.getElementById('micBtn').classList.remove('speaking');
+                }
+            });
+
+            // Chair interaction
+            renderer.domElement.addEventListener('click', onChairClick);
+            renderer.domElement.addEventListener('mousemove', onChairHover);
+
+            // Store controls for animation loop
+            window.cameraControls = {
+                moveSpeed,
+                keys,
+                isLocked,
+                yaw,
+                pitch,
+                update: function() {
+                    if (isLocked && !state.isSitting) {
+                        const direction = new THREE.Vector3();
+                        const right = new THREE.Vector3();
+
+                        camera.getWorldDirection(direction);
+                        direction.y = 0;
+                        direction.normalize();
+
+                        right.crossVectors(direction, new THREE.Vector3(0, 1, 0));
+
+                        if (keys['KeyW']) camera.position.addScaledVector(direction, moveSpeed);
+                        if (keys['KeyS']) camera.position.addScaledVector(direction, -moveSpeed);
+                        if (keys['KeyA']) camera.position.addScaledVector(right, -moveSpeed);
+                        if (keys['KeyD']) camera.position.addScaledVector(right, moveSpeed);
+
+                        // Clamp position to room bounds
+                        camera.position.x = Math.max(-14, Math.min(14, camera.position.x));
+                        camera.position.z = Math.max(-14, Math.min(14, camera.position.z));
+                    }
+                }
+            };
+        }
+
+        function onChairClick(event) {
+            if (state.isSitting) {
+                // Stand up
+                state.isSitting = false;
+                state.currentChair = null;
+                camera.position.set(0, 1.6, 8);
+                camera.rotation.set(0, 0, 0);
+                window.cameraControls.yaw = 0;
+                window.cameraControls.pitch = 0;
+                showNotification('You stood up');
+                return;
+            }
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(chairs, true);
+
+            if (intersects.length > 0) {
+                let chairObject = intersects[0].object;
+                while (chairObject.parent && !chairObject.userData.hasOwnProperty('index')) {
+                    chairObject = chairObject.parent;
+                }
+
+                if (chairObject.userData.hasOwnProperty('index')) {
+                    const chairIndex = chairObject.userData.index;
+                    if (!chairs[chairIndex].userData.occupied) {
+                        // Sit down
+                        state.isSitting = true;
+                        state.currentChair = chairIndex;
+                        chairs[chairIndex].userData.occupied = true;
+                        
+                        // Move camera to chair position
+                        const chairPos = chairs[chairIndex].position;
+                        camera.position.set(chairPos.x, 1.3, chairPos.z + 0.5);
+                        
+                        // Look at dashboard
+                        camera.lookAt(0, 2, -8);
+                        window.cameraControls.yaw = Math.atan2(-camera.position.x, -camera.position.z - 8 - camera.position.z);
+                        window.cameraControls.pitch = -0.2;
+                        
+                        showNotification(`Sitting at Chair ${chairIndex + 1}`);
+                    } else {
+                        showNotification('Chair is occupied');
+                    }
+                }
+            }
+        }
+
+        function onChairHover(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(chairs, true);
+
+            const tooltip = document.getElementById('chairTooltip');
+
+            if (intersects.length > 0) {
+                let chairObject = intersects[0].object;
+                while (chairObject.parent && !chairObject.userData.hasOwnProperty('index')) {
+                    chairObject = chairObject.parent;
+                }
+
+                if (chairObject.userData.hasOwnProperty('index')) {
+                    const chairIndex = chairObject.userData.index;
+                    const isOccupied = chairs[chairIndex].userData.occupied;
+                    
+                    tooltip.textContent = isOccupied ? 'Occupied' : `Click to sit at Chair ${chairIndex + 1}`;
+                    tooltip.style.left = event.clientX + 15 + 'px';
+                    tooltip.style.top = event.clientY + 15 + 'px';
+                    tooltip.classList.add('visible');
+                    
+                    clearTimeout(hoverTimeout);
+                }
+            } else {
+                tooltip.classList.remove('visible');
+            }
+        }
+
+        function setupUI() {
+            // Room link copy
+            document.getElementById('roomId').addEventListener('click', () => {
+                navigator.clipboard.writeText(`https://holomeet.vr/room/${state.roomId}`);
+                showNotification('Room link copied to clipboard!');
+            });
+
+            // Microphone toggle
+            document.getElementById('micBtn').addEventListener('click', () => {
+                state.isMicOn = !state.isMicOn;
+                const btn = document.getElementById('micBtn');
+                if (state.isMicOn) {
+                    btn.classList.remove('muted');
+                    showNotification('Microphone enabled');
+                } else {
+                    btn.classList.add('muted');
+                    showNotification('Microphone muted');
+                }
+            });
+
+            // PTT Mode toggle
+            document.getElementById('pttModeBtn').addEventListener('click', () => {
+                state.isPttMode = !state.isPttMode;
+                const btn = document.getElementById('pttModeBtn');
+                if (state.isPttMode) {
+                    btn.classList.add('active');
+                    showNotification('Push-to-Talk mode enabled');
+                } else {
+                    btn.classList.remove('active');
+                    showNotification('Open mic mode');
+                }
+            });
+
+            // Dashboard tabs
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.getElementById(btn.dataset.tab + 'Tab').classList.add('active');
+                    state.currentMode = btn.dataset.tab;
+                });
+            });
+
+            // YouTube video load
+            document.getElementById('loadVideo').addEventListener('click', () => {
+                const input = document.getElementById('youtubeUrl').value;
+                const videoId = extractYouTubeId(input);
+                if (videoId) {
+                    state.youtubeVideoId = videoId;
+                    showNotification('Video loaded on dashboard');
+                } else {
+                    showNotification('Invalid YouTube URL');
+                }
+            });
+
+            // PDF load
+            document.getElementById('loadPdf').addEventListener('click', () => {
+                const input = document.getElementById('pdfUrl').value;
+                if (input) {
+                    state.pdfUrl = input;
+                    state.currentSlide = 1;
+                    state.totalSlides = 5; // Demo value
+                    updateSlideCounter();
+                    showNotification('PDF loaded - Slide 1');
+                }
+            });
+
+            // Slide navigation
+            document.getElementById('prevSlide').addEventListener('click', () => {
+                if (state.currentSlide > 1) {
+                    state.currentSlide--;
+                    updateSlideCounter();
+                }
+            });
+
+            document.getElementById('nextSlide').addEventListener('click', () => {
+                if (state.currentSlide < state.totalSlides) {
+                    state.currentSlide++;
+                    updateSlideCounter();
+                }
+            });
+
+            // Avatar selection
+            document.querySelectorAll('.avatar-option').forEach(option => {
+                option.addEventListener('click', () => {
+                    document.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
+                    option.classList.add('selected');
+                    state.selectedAvatar = parseInt(option.dataset.avatar);
+                    showNotification(`Avatar ${state.selectedAvatar + 1} selected`);
+                });
+            });
+
+            // Randomize avatar
+            document.getElementById('randomizeAvatar').addEventListener('click', () => {
+                const random = Math.floor(Math.random() * 5);
+                document.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
+                document.querySelector(`[data-avatar="${random}"]`).classList.add('selected');
+                state.selectedAvatar = random;
+                showNotification(`Random avatar selected`);
+            });
+
+            // Present button
+            document.getElementById('presentBtn').addEventListener('click', () => {
+                openFullscreenDashboard();
+            });
+
+            // Close dashboard
+            document.getElementById('closeDashboard').addEventListener('click', () => {
+                document.getElementById('dashboardFullscreen').classList.remove('active');
+            });
+
+            // Leave room
+            document.getElementById('leaveBtn').addEventListener('click', () => {
+                showNotification('Leaving room...');
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            });
+        }
+
+        function extractYouTubeId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        function updateSlideCounter() {
+            document.getElementById('slideCounter').textContent = `Slide ${state.currentSlide} / ${state.totalSlides}`;
+        }
+
+        function openFullscreenDashboard() {
+            const fullscreen = document.getElementById('dashboardFullscreen');
+            const content = document.getElementById('dashboardContent');
+            
+            fullscreen.classList.add('active');
+
+            if (state.currentMode === 'youtube' && state.youtubeVideoId) {
+                document.getElementById('dashboardTitle').textContent = 'YouTube Presentation';
+                content.innerHTML = `
+                    <div class="dashboard-youtube-container">
+                        <iframe src="https://www.youtube.com/embed/${state.youtubeVideoId}?autoplay=1" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowfullscreen></iframe>
+                    </div>
+                `;
+            } else if (state.currentMode === 'pdf' && state.pdfUrl) {
+                document.getElementById('dashboardTitle').textContent = 'PDF Presentation';
+                content.innerHTML = `
+                    <div class="dashboard-pdf-container">
+                        <div class="pdf-toolbar">
+                            <button class="nav-btn" onclick="prevPdfPage()">◀</button>
+                            <span class="pdf-page-info" id="pdfPageInfo">Page ${state.currentSlide} of ${state.totalSlides}</span>
+                            <button class="nav-btn" onclick="nextPdfPage()">▶</button>
+                        </div>
+                        <div class="pdf-canvas-wrapper">
+                            <canvas id="pdfCanvas"></canvas>
+                        </div>
+                    </div>
+                `;
+                // Draw placeholder PDF content
+                drawPdfPlaceholder();
+            } else {
+                document.getElementById('dashboardTitle').textContent = 'Dashboard';
+                content.innerHTML = `
+                    <div style="color: #fff; text-align: center;">
+                        <p style="font-size: 18px; margin-bottom: 20px;">No content loaded</p>
+                        <p style="color: #888;">Load a YouTube video or PDF from the control panel</p>
+                    </div>
+                `;
+            }
+        }
+
+        function drawPdfPlaceholder() {
+            const canvas = document.getElementById('pdfCanvas');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            canvas.width = 800;
+            canvas.height = 600;
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(50, 50, 700, 500);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('PDF Presentation', canvas.width / 2, canvas.height / 2 - 50);
+            
+            ctx.font = '24px Arial';
+            ctx.fillStyle = '#888888';
+            ctx.fillText(`Slide ${state.currentSlide}`, canvas.width / 2, canvas.height / 2 + 20);
+            
+            document.getElementById('pdfPageInfo').textContent = `Page ${state.currentSlide} of ${state.totalSlides}`;
+        }
+
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            // Update camera controls
+            if (window.cameraControls) {
+                window.cameraControls.update();
+            }
+
+            // Animate dashboard glow
+            const dashboardGlow = dashboard.children.find(c => c.material && c.material.emissive);
+            if (dashboardGlow) {
+                dashboardGlow.material.emissiveIntensity = 0.3 + Math.sin(time * 2) * 0.1;
+            }
+
+            // Animate particles
+            scene.children.forEach(child => {
+                if (child.userData && child.userData.velocities) {
+                    const positions = child.geometry.attributes.position.array;
+                    child.userData.velocities.forEach((vel, i) => {
+                        positions[i * 3] += vel.x;
+                        positions[i * 3 + 1] += vel.y;
+                        positions[i * 3 + 2] += vel.z;
+
+                        if (positions[i * 3 + 1] > 10) {
+                            positions[i * 3 + 1] = 0;
+                        }
+                    });
+                    child.geometry.attributes.position.needsUpdate = true;
+                }
+            });
+
+            // Animate avatar rings
+            avatars.forEach((avatar, index) => {
+                const ring = avatar.children.find(c => c.geometry && c.geometry.type === 'TorusGeometry');
+                if (ring) {
+                    ring.rotation.z += delta * 0.5;
+                }
+                
+                // Speaking animation
+                if (state.participants[index] && state.participants[index].isSpeaking) {
+                    avatar.scale.y = 1 + Math.sin(time * 10) * 0.05;
+                }
+            });
+
+            // Update participant count
+            document.getElementById('participantCount').textContent = 
+                `${state.participants.length} participants`;
+
+            renderer.render(scene, camera);
+        }
+
+        // Initialize on load
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

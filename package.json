@@ -1,0 +1,16 @@
+{
+  "name": "holomeet-vr",
+  "version": "1.0.0",
+  "description": "Holographic VR Conference Room",
+  "main": "index.html",
+  "scripts": {
+    "serve": "npx serve .",
+    "build": "mkdir -p dist && cp index.html dist/"
+  },
+  "keywords": ["vr", "conference", "3d", "holographic"],
+  "author": "MiniMax Agent",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.57.0"
+  }
+}
