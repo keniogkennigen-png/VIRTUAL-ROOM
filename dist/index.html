@@ -3,138 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HoloMeet VR - Full Featured Suite</title>
+    <title>HoloMeet VR - Ultimate Executive Edition</title>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS3DRenderer.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
+
     <style>
-        body { margin: 0; overflow: hidden; background: #020205; font-family: 'Segoe UI', monospace; color: #00f3ff; }
+        :root { --neon: #00f3ff; --neon-red: #ff3333; --neon-green: #00ff88; }
+        body { margin: 0; overflow: hidden; background: #020205; font-family: 'Segoe UI', monospace; color: var(--neon); }
         
-        #hud { position: fixed; inset: 0; pointer-events: none; padding: 20px; z-index: 100; display: flex; flex-direction: column; justify-content: space-between; }
-        .panel { 
-            background: rgba(5, 10, 20, 0.9); border: 1px solid #00f3ff; 
-            padding: 15px; backdrop-filter: blur(10px); pointer-events: auto;
-            box-shadow: 0 0 20px rgba(0, 243, 255, 0.15); border-radius: 4px;
+        /* HUD Holográfico (Estilo Premium) */
+        #hud { 
+            position: fixed; inset: 0; pointer-events: none; padding: 25px; z-index: 100;
+            display: flex; flex-direction: column; justify-content: space-between;
+            background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.4) 100%);
         }
         
+        /* Efecto de líneas de escaneo (Scanlines) */
+        #hud::before {
+            content: " "; position: fixed; inset: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
+                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 3px 100%; pointer-events: none;
+            z-index: -1;
+        }
+
+        .panel { 
+            background: rgba(0, 15, 30, 0.85); border: 1px solid var(--neon); 
+            padding: 15px; backdrop-filter: blur(12px); pointer-events: auto;
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.15); border-radius: 2px;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+
         .top-bar { display: flex; justify-content: space-between; align-items: flex-start; }
-        .status-dot { width: 8px; height: 8px; background: #333; border-radius: 50%; display: inline-block; margin-right: 5px; box-shadow: 0 0 5px #333; transition: 0.3s; }
-        .status-active { background: #00ff00; box-shadow: 0 0 8px #00ff00; }
-        .status-speaking { background: #00ff00; box-shadow: 0 0 15px #00ff00; animation: speakingPulse 0.5s infinite; }
+        #timer-display { font-size: 28px; font-weight: bold; color: var(--neon); text-shadow: 0 0 10px var(--neon); }
         
+        button { 
+            background: transparent; color: var(--neon); border: 1px solid var(--neon); 
+            padding: 8px 15px; cursor: pointer; font-weight: bold; font-size: 10px;
+            transition: all 0.3s; margin: 2px;
+        }
+        button:hover { background: var(--neon); color: #000; box-shadow: 0 0 15px var(--neon); }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        
+        #chat-box { width: 320px; height: 250px; display: flex; flex-direction: column; }
+        #messages { flex: 1; overflow-y: auto; font-size: 11px; margin-bottom: 10px; padding-right: 5px; }
+        input { background: rgba(0,0,0,0.5); border: 1px solid #004444; color: #fff; padding: 8px; width: 100%; }
+        
+        /* Modal de Bienvenida */
+        #welcome-modal {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 1000;
+            display: flex; align-items: center; justify-content: center; text-align: center;
+        }
+        .welcome-content {
+            background: rgba(5, 10, 20, 0.95); border: 2px solid var(--neon);
+            padding: 40px; max-width: 500px;
+            box-shadow: 0 0 50px rgba(0, 243, 255, 0.3); border-radius: 4px;
+        }
+        .welcome-content h1 { color: var(--neon); margin-bottom: 20px; font-size: 28px; }
+        .welcome-content p { color: #ccc; margin-bottom: 15px; line-height: 1.6; text-align: left; }
+        .welcome-content ul { color: #ccc; text-align: left; margin-bottom: 25px; padding-left: 20px; }
+        .welcome-content li { margin-bottom: 8px; }
+        #enter-btn {
+            background: linear-gradient(135deg, var(--neon), #0088ff); color: #000;
+            padding: 15px 40px; font-size: 16px; border: none;
+        }
+        #enter-btn:hover { box-shadow: 0 0 30px var(--neon); transform: scale(1.05); }
+        
+        /* Indicador de hablando */
+        .speaking-indicator {
+            position: absolute; width: 20px; height: 20px;
+            background: var(--neon-green); border-radius: 50%;
+            box-shadow: 0 0 15px var(--neon-green); animation: speakingPulse 0.5s infinite;
+            pointer-events: none; display: none;
+        }
         @keyframes speakingPulse {
             0%, 100% { transform: scale(1); opacity: 1; }
             50% { transform: scale(1.3); opacity: 0.8; }
         }
         
-        #chat-box { width: 320px; height: 220px; display: flex; flex-direction: column; }
-        #messages { flex: 1; overflow-y: auto; font-size: 11px; margin-bottom: 8px; color: #ccc; scrollbar-width: thin; }
-        #messages div { margin-bottom: 4px; word-wrap: break-word; }
-        
-        .controls { display: flex; gap: 10px; justify-content: center; align-items: center; flex-wrap: wrap; }
-        button { 
-            background: rgba(0, 243, 255, 0.1); color: #00f3ff; border: 1px solid #00f3ff; 
-            padding: 8px 16px; cursor: pointer; text-transform: uppercase; font-weight: bold; font-size: 11px;
-            transition: all 0.2s;
-        }
-        button:hover { background: #00f3ff; color: #000; box-shadow: 0 0 15px #00f3ff; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-        
-        .timer-warning { color: #ff3333 !important; text-shadow: 0 0 15px #ff0000 !important; animation: pulse 0.5s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        
-        input[type="text"] { background: #000; border: 1px solid #333; color: #fff; padding: 6px; border-radius: 3px; }
-        input[type="text"]:focus { border-color: #00f3ff; outline: none; }
-        
-        #timer-display { font-size: 24px; font-weight: bold; text-align: center; margin: 5px 0; letter-spacing: 2px; }
-        #pdf-canvas { display: none; }
-        .yt-container { width: 720px; height: 405px; background: #000; border-radius: 8px; overflow: hidden; position: relative; }
-        .yt-container iframe { width: 100%; height: 100%; border: none; }
-        
-        /* Modal de Bienvenida */
-        #welcome-modal {
-            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.95); z-index: 1000;
-            display: flex; align-items: center; justify-content: center;
-        }
-        #welcome-modal.hidden { display: none; }
-        .welcome-content {
-            background: rgba(5, 10, 20, 0.95); border: 2px solid #00f3ff;
-            padding: 40px; max-width: 500px; text-align: center;
-            box-shadow: 0 0 50px rgba(0, 243, 255, 0.3); border-radius: 8px;
-        }
-        .welcome-content h1 { color: #00f3ff; margin-bottom: 20px; font-size: 28px; }
-        .welcome-content p { color: #ccc; margin-bottom: 15px; line-height: 1.6; text-align: left; }
-        .welcome-content ul { color: #ccc; text-align: left; margin-bottom: 25px; padding-left: 20px; }
-        .welcome-content li { margin-bottom: 8px; }
-        #enter-btn {
-            background: linear-gradient(135deg, #00f3ff, #0088ff); color: #000;
-            padding: 15px 40px; font-size: 16px; border: none;
-        }
-        #enter-btn:hover { box-shadow: 0 0 30px #00f3ff; transform: scale(1.05); }
-        
-        /* Error de YouTube bloqueado */
-        .yt-blocked-message {
-            position: absolute; inset: 0; background: rgba(20, 20, 20, 0.95);
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: #ff6b6b; text-align: center; padding: 20px;
-        }
-        .yt-blocked-message h3 { color: #ff6b6b; margin-bottom: 15px; }
-        .yt-blocked-message p { color: #ccc; max-width: 400px; line-height: 1.5; }
-        .yt-blocked-message .try-again {
-            margin-top: 20px; background: #ff6b6b; color: #000; border: none; padding: 10px 25px;
-        }
-        
-        /* Indicador de hablando en avatar */
-        .speaking-indicator {
-            position: absolute; width: 20px; height: 20px;
-            background: #00ff00; border-radius: 50%;
-            box-shadow: 0 0 15px #00ff00; animation: speakingPulse 0.5s infinite;
-            pointer-events: none; display: none;
-        }
-        
         /* Cursor interactivo para YouTube */
         .youtube-active .webgl-canvas { pointer-events: none !important; }
         .youtube-active .css3d-canvas { pointer-events: auto !important; }
+        
+        /* Mensaje de video bloqueado */
+        .yt-blocked-message {
+            position: absolute; inset: 0; background: rgba(20, 20, 20, 0.95);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: var(--neon-red); text-align: center; padding: 20px;
+        }
+        .yt-blocked-message h3 { color: var(--neon-red); margin-bottom: 15px; }
+        .yt-blocked-message p { color: #ccc; max-width: 400px; line-height: 1.5; }
+        .yt-blocked-message button { margin-top: 20px; background: var(--neon-red); color: #000; border: none; }
+        
+        #pdf-canvas { display: none; }
     </style>
 </head>
 <body>
 
-<!-- Modal de Bienvenida -->
 <div id="welcome-modal">
     <div class="welcome-content">
-        <h1>🎬 HoloMeet VR</h1>
-        <p>Bienvenido a la sala de videoconferencias inmersiva. Antes de continuar, ten en cuenta:</p>
+        <h1>HoloMeet VR</h1>
+        <p>Bienvenido a la sala de videoconferencias inmersiva. Antes de continuar:</p>
         <ul>
             <li>🎤 Usa auriculares para evitar eco y feedback de audio</li>
             <li>🌐 Comparte el ID de sala con tus participantes</li>
             <li>📺 Para videos de YouTube, usa enlaces públicos</li>
-            <li>⏰ Usa el temporizador para gestionar turnos de palabra</li>
+            <li>⏰ Usa el temporizador para gestionar turnos</li>
         </ul>
-        <button id="enter-btn" onclick="enterRoom()">ENTRAR A LA SALA</button>
+        <button id="enter-btn" onclick="startApp()">ENTRAR A LA SALA</button>
     </div>
 </div>
 
-<div id="hud">
+<div id="hud" style="display:none;">
     <div class="top-bar">
         <div class="panel">
-            <div style="font-size: 10px; opacity: 0.6; margin-bottom: 5px;">ESTADO DE RED</div>
-            <div style="font-size: 14px; display: flex; align-items: center;">
-                <div id="net-status" class="status-dot"></div>
-                <span id="role-display">CONECTANDO...</span>
-            </div>
-            <div id="room-id-display" style="font-size: 11px; margin-top: 5px; color: #888;"></div>
-            <div id="utc-clock" style="font-size: 11px; margin-top: 5px; font-family: monospace;"></div>
-            <div id="participants" style="font-size: 11px; margin-top: 5px; color: #00f3ff;">👥 1 participante</div>
+            <div id="role-tag" style="font-size: 9px; margin-bottom: 5px; color: #888;">ESTADO DE RED</div>
+            <div id="room-id" style="font-size: 14px; font-weight: bold;">ID: ---</div>
+            <div id="user-count" style="font-size: 10px; margin-top: 5px; color: var(--neon);">👥 1 participante</div>
         </div>
-
-        <div class="panel" style="text-align: center;">
-            <div style="font-size: 10px;">TIEMPO DE SESIÓN</div>
+        
+        <div class="panel" style="text-align:center;">
+            <div style="font-size: 9px; opacity: 0.7;">CONTROL DE TURNO</div>
             <div id="timer-display">00:00</div>
-            <div style="display:flex; gap:5px; justify-content:center; margin-top:5px;">
-                <button onclick="setTimer(5)">5 MIN</button>
-                <button onclick="setTimer(10)">10 MIN</button>
-                <button onclick="setTimer(15)">15 MIN</button>
+            <div style="display:flex; gap:5px; justify-content: center; margin-top: 5px;">
+                <button onclick="sendTimer(5)">5 MIN</button>
+                <button onclick="sendTimer(10)">10 MIN</button>
+                <button onclick="sendTimer(15)">15 MIN</button>
             </div>
         </div>
 
@@ -144,106 +148,65 @@
         </div>
     </div>
 
-    <div class="controls panel">
-        <input type="file" id="pdf-upload" accept=".pdf" style="display:none">
-        <button onclick="document.getElementById('pdf-upload').click()">📂 PDF</button>
+    <div class="controls panel" style="display:flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;">
+        <div>
+            <button onclick="document.getElementById('pdf-upload').click()">📂 PDF HD</button>
+            <input type="file" id="pdf-upload" accept=".pdf" style="display:none">
+        </div>
         
-        <div style="display: flex; gap: 5px; align-items: center; border-left: 1px solid #333; padding-left: 10px;">
+        <div style="display:flex; align-items:center; border-left: 1px solid #333; padding-left: 15px;">
             <button onclick="changePage(-1)">◀</button>
-            <span id="page-display" style="font-size: 12px; min-width: 50px; text-align: center;">PAG 1</span>
+            <span id="page-num" style="margin: 0 15px; font-size: 14px; min-width: 80px; text-align:center;">PAG 1 / 1</span>
             <button onclick="changePage(1)">▶</button>
         </div>
 
-        <div style="display:flex; gap:5px; border-left: 1px solid #333; padding-left: 10px;">
-            <input type="text" id="yt-url" placeholder="YouTube URL" style="width: 180px;">
-            <button onclick="loadYouTube()">▶ YT</button>
+        <div style="border-left: 1px solid #333; padding-left: 15px; display:flex; gap:5px;">
+            <input type="text" id="yt-url" placeholder="YouTube URL" style="width: 150px; font-size: 10px;">
+            <button onclick="loadYT()">▶ YT</button>
         </div>
 
-        <div style="border-left: 1px solid #333; padding-left: 10px;">
+        <div style="border-left: 1px solid #333; padding-left: 15px;">
             <button id="mic-btn" onclick="toggleMic()">🎤 OFF</button>
         </div>
         
-        <button id="mute-all-btn" onclick="toggleMuteAll()" style="border-color: #ff8800; color: #ff8800;">🔇 SILENCIAR</button>
+        <button id="mute-all-btn" onclick="toggleMuteAll()" style="border-color: #ff8800; color: #ff8800;" disabled>🔇 SILENCIAR</button>
         
-        <button onclick="exportLog()" style="border-color: #ff4444; color: #ff4444;">💾 LOG</button>
+        <button onclick="exportLog()" style="border-color: var(--neon-red); color: var(--neon-red);">💾 LOG</button>
     </div>
 </div>
 
+<div id="container"></div>
 <canvas id="pdf-canvas"></canvas>
 
 <script>
-    // --- VARIABLES GLOBALES ---
-    let scene, camera, renderer, cssRenderer, dashboard, laserPoint;
-    let peer, myConnection = null, isHost = false;
-    let clientConnections = [], remoteAvatars = {};
-    let pdfDoc = null, pageNum = 1, youtubeVideoId = null;
-    let logs = [], timerInterval, timeLeft = 0;
+    // --- CONFIGURACIÓN VISUAL PREMIUM ---
+    let scene, camera, renderer, composer, cssRenderer, dashboard, laserPoint;
+    let peer, myConn, isHost = false, clientConns = [];
+    let remoteAvatars = {};
+    let pdfDoc = null, pageNum = 1, logs = [], timeLeft = 0;
     let audioContext = null, audioStream = null, isMuted = false;
-    let audioContextUnlocked = false;
-    let isYouTubeActive = false;
+    let youtubeVideoId = null, isYouTubeActive = false;
     
-    // Configuración de Sala
-    const urlParams = new URLSearchParams(window.location.search);
+    const urlParams = new URLSearchParams(location.search);
     const roomName = urlParams.get('room') || 'DEMO';
-    const ROOM_ID = 'HM-VR-FULL-' + roomName;
+    const ROOM_ID = 'HM-ULTIMATE-' + roomName;
 
-    // --- MODAL DE BIENVENIDA ---
-    function enterRoom() {
-        document.getElementById('welcome-modal').classList.add('hidden');
-        
-        // Desbloquear contexto de audio del navegador
-        unlockAudioContext();
-        
-        // Inicializar la aplicación 3D
-        init();
-    }
-
-    async function unlockAudioContext() {
-        try {
-            // Crear contexto de audio y suspenderlo inicialmente
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            
-            // Intentar desbloquear con un sonido很短
-            if (audioContext.state === 'suspended') {
-                await audioContext.resume();
-            }
-            
-            audioContextUnlocked = true;
-            addLog('AUDIO', 'Contexto de audio desbloqueado');
-        } catch (e) {
-            console.log('Audio context no disponible:', e);
-            addLog('AUDIO', 'Audio no disponible en este navegador');
-        }
-    }
-
-    function addLog(type, msg) {
-        const t = new Date().toLocaleTimeString();
-        logs.push(`[${t}] ${type}: ${msg}`);
-        if(type === 'CHAT') {
-            const div = document.createElement('div');
-            div.innerHTML = `<span style="color: #666;">${t}</span> ${msg}`;
-            document.getElementById('messages').appendChild(div);
-            document.getElementById('messages').scrollTop = 9999;
-        }
-    }
-
-    // --- INICIALIZACIÓN 3D COMPLETA ---
-    function init() {
+    function init3D() {
         scene = new THREE.Scene();
         scene.fog = new THREE.Fog(0x020205, 5, 25);
 
-        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.7, 8);
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 1.8, 7);
 
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
         renderer.domElement.classList.add('webgl-canvas');
         renderer.domElement.style.position = 'absolute';
         renderer.domElement.style.top = '0';
         renderer.domElement.style.pointerEvents = 'none';
-        document.body.appendChild(renderer.domElement);
+        document.getElementById('container').appendChild(renderer.domElement);
 
         // CSS3D Renderer para YouTube
         cssRenderer = new THREE.CSS3DRenderer();
@@ -254,194 +217,72 @@
         cssRenderer.domElement.style.pointerEvents = 'none';
         document.body.appendChild(cssRenderer.domElement);
 
-        // Suelo PBR mejorado
-        const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(60, 60),
-            new THREE.MeshPhysicalMaterial({ 
-                color: 0x080808, 
-                metalness: 0.85, 
-                roughness: 0.15, 
-                clearcoat: 1.0,
-                clearcoatRoughness: 0.1
-            })
-        );
-        floor.rotation.x = -Math.PI / 2;
+        // --- POST-PROCESAMIENTO (BLOOM/BRILLO) ---
+        const renderScene = new THREE.RenderPass(scene, camera);
+        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0.21;
+        bloomPass.strength = 1.2; // Intensidad del brillo neón
+        bloomPass.radius = 0.55;
+
+        composer = new THREE.EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // --- MATERIALES PREMIUM ---
+        const floorMat = new THREE.MeshPhysicalMaterial({ 
+            color: 0x080808, metalness: 0.9, roughness: 0.1, 
+            clearcoat: 1, clearcoatRoughness: 0.05, reflectivity: 1 
+        });
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), floorMat);
+        floor.rotation.x = -Math.PI/2;
         scene.add(floor);
 
-        // Dashboard (Pantalla)
         dashboard = new THREE.Mesh(
-            new THREE.PlaneGeometry(7, 4),
+            new THREE.PlaneGeometry(6.4, 3.6),
             new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.15, side: THREE.DoubleSide })
         );
-        dashboard.position.set(0, 2.8, -5);
+        dashboard.position.set(0, 2.6, -4);
         scene.add(dashboard);
 
         // Marco de la pantalla
-        const frameGeo = new THREE.BoxGeometry(7.4, 4.4, 0.1);
-        const frameMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.9, roughness: 0.2 });
-        const frame = new THREE.Mesh(frameGeo, frameMat);
-        frame.position.set(0, 2.8, -5.1);
+        const frame = new THREE.Mesh(
+            new THREE.BoxGeometry(6.8, 4.0, 0.1),
+            new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.9, roughness: 0.2 })
+        );
+        frame.position.set(0, 2.6, -4.1);
         scene.add(frame);
 
-        // Soporte de pantalla
-        const standBase = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.5, 0.6, 0.1, 32),
-            frameMat
-        );
-        standBase.position.set(0, 0.05, -4.5);
-        scene.add(standBase);
-        
-        const standPole = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.08, 0.08, 2.5, 16),
-            new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.3 })
-        );
-        standPole.position.set(0, 1.3, -4.5);
-        scene.add(standPole);
-
-        // Puntero Láser
+        // Láser Neón
         laserPoint = new THREE.Mesh(
-            new THREE.SphereGeometry(0.05), 
+            new THREE.SphereGeometry(0.04),
             new THREE.MeshBasicMaterial({ color: 0xff0000 })
         );
         laserPoint.visible = false;
         scene.add(laserPoint);
 
-        // Iluminación profesional
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.15);
-        scene.add(ambientLight);
-
-        const rectLight = new THREE.RectAreaLight(0x00f3ff, 8, 12, 8);
-        rectLight.position.set(0, 6, -2);
-        rectLight.lookAt(0, 0, 0);
+        // Iluminación Pro
+        const ambient = new THREE.HemisphereLight(0x00f3ff, 0x000000, 0.4);
+        scene.add(ambient);
+        
+        const rectLight = new THREE.RectAreaLight(0x00f3ff, 5, 10, 10);
+        rectLight.position.set(0, 5, -2);
+        rectLight.lookAt(0,0,0);
         scene.add(rectLight);
 
-        const spotLight = new THREE.SpotLight(0xffffff, 2, 20, Math.PI / 6, 0.5);
+        const spotLight = new THREE.SpotLight(0xffffff, 1, 20, Math.PI/6, 0.5);
         spotLight.position.set(0, 8, 0);
         spotLight.target.position.set(0, 0, 0);
-        spotLight.castShadow = true;
         scene.add(spotLight);
         scene.add(spotLight.target);
 
         // Partículas ambientales
         createParticles();
 
-        initNetwork();
-        setupInputs();
+        setupNetwork();
+        setupInteractions();
         animate();
         
         addLog('SYSTEM', 'Sala HoloMeet VR inicializada');
-    }
-
-    // --- SISTEMA DE AVATARES ---
-    function createAvatarMesh(id, color, name) {
-        const group = new THREE.Group();
-        
-        // Cuerpo (cilindro)
-        const body = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.2, 0.25, 0.8, 32),
-            new THREE.MeshStandardMaterial({ 
-                color: color, 
-                metalness: 0.6, 
-                roughness: 0.3,
-                emissive: color,
-                emissiveIntensity: 0.2
-            })
-        );
-        body.position.y = 0.4;
-        group.add(body);
-        
-        // Cabeza (esfera)
-        const head = new THREE.Mesh(
-            new THREE.SphereGeometry(0.18, 32, 32),
-            new THREE.MeshStandardMaterial({ color: 0xffe4c4, metalness: 0.1, roughness: 0.6 })
-        );
-        head.position.y = 1.1;
-        group.add(head);
-        
-        // Indicador de participación (anillo)
-        const ring = new THREE.Mesh(
-            new THREE.TorusGeometry(0.35, 0.015, 8, 64),
-            new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.8 })
-        );
-        ring.rotation.x = Math.PI / 2;
-        ring.position.y = 0.15;
-        group.add(ring);
-        group.userData.ring = ring;
-        
-        // Indicador de hablando (esfera sobre la cabeza)
-        const speakingIndicator = new THREE.Mesh(
-            new THREE.SphereGeometry(0.12, 16, 16),
-            new THREE.MeshBasicMaterial({ 
-                color: 0x00ff00, 
-                transparent: true, 
-                opacity: 0,
-                depthTest: false
-            })
-        );
-        speakingIndicator.position.y = 1.5;
-        speakingIndicator.renderOrder = 999;
-        group.add(speakingIndicator);
-        group.userData.speakingIndicator = speakingIndicator;
-        
-        // Etiqueta con nombre
-        const canvas = document.createElement('canvas');
-        canvas.width = 256; canvas.height = 48;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.roundRect(0, 0, 256, 48, 8);
-        ctx.fill();
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 20px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(name, 128, 32);
-        
-        const tex = new THREE.CanvasTexture(canvas);
-        const sprite = new THREE.Sprite(
-            new THREE.SpriteMaterial({ map: tex, transparent: true })
-        );
-        sprite.scale.set(1.5, 0.3, 1);
-        sprite.position.y = 1.6;
-        group.add(sprite);
-        
-        return group;
-    }
-
-    function updateRemoteAvatar(id, data) {
-        if(!remoteAvatars[id]) {
-            const avatar = createAvatarMesh(id, data.color || '#00f3ff', data.name || 'Usuario');
-            scene.add(avatar);
-            remoteAvatars[id] = avatar;
-            updateParticipantCount();
-            addLog('RED', `${data.name || 'Usuario'} se unió`);
-        }
-        
-        const avatar = remoteAvatars[id];
-        avatar.position.set(data.x, data.y, data.z);
-        avatar.rotation.y = data.rotY || 0;
-        
-        // Actualizar indicador de hablando
-        if(avatar.userData.speakingIndicator) {
-            avatar.userData.speakingIndicator.material.opacity = data.isSpeaking ? 0.8 : 0;
-        }
-        
-        // Animar anillo
-        if(avatar.userData.ring) {
-            avatar.userData.ring.rotation.z += 0.02;
-        }
-    }
-
-    function removeRemoteAvatar(id) {
-        if(remoteAvatars[id]) {
-            scene.remove(remoteAvatars[id]);
-            delete remoteAvatars[id];
-            updateParticipantCount();
-            addLog('RED', 'Usuario desconectado');
-        }
-    }
-
-    function updateParticipantCount() {
-        const count = Object.keys(remoteAvatars).length + 1;
-        document.getElementById('participants').innerHTML = `👥 ${count} participante${count > 1 ? 's' : ''}`;
     }
 
     function createParticles() {
@@ -480,67 +321,157 @@
         scene.userData.particles = particles;
     }
 
-    // --- LÓGICA DE RED ---
-    function initNetwork() {
-        document.getElementById('room-id-display').innerText = `ID: ${roomName}`;
+    // --- SISTEMA DE AVATARES ---
+    function createAvatarMesh(id, color, name) {
+        const group = new THREE.Group();
         
+        const body = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.2, 0.25, 0.8, 32),
+            new THREE.MeshStandardMaterial({ 
+                color: color, 
+                metalness: 0.6, 
+                roughness: 0.3,
+                emissive: color,
+                emissiveIntensity: 0.2
+            })
+        );
+        body.position.y = 0.4;
+        group.add(body);
+        
+        const head = new THREE.Mesh(
+            new THREE.SphereGeometry(0.18, 32, 32),
+            new THREE.MeshStandardMaterial({ color: 0xffe4c4, metalness: 0.1, roughness: 0.6 })
+        );
+        head.position.y = 1.1;
+        group.add(head);
+        
+        const ring = new THREE.Mesh(
+            new THREE.TorusGeometry(0.35, 0.015, 8, 64),
+            new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.8 })
+        );
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.15;
+        group.add(ring);
+        group.userData.ring = ring;
+        
+        const speakingIndicator = new THREE.Mesh(
+            new THREE.SphereGeometry(0.12, 16, 16),
+            new THREE.MeshBasicMaterial({ 
+                color: 0x00ff88, 
+                transparent: true, 
+                opacity: 0,
+                depthTest: false
+            })
+        );
+        speakingIndicator.position.y = 1.5;
+        speakingIndicator.renderOrder = 999;
+        group.add(speakingIndicator);
+        group.userData.speakingIndicator = speakingIndicator;
+        
+        // Etiqueta con nombre
+        const canvas = document.createElement('canvas');
+        canvas.width = 256; canvas.height = 48;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.roundRect(0, 0, 256, 48, 8);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(name, 128, 32);
+        
+        const tex = new THREE.CanvasTexture(canvas);
+        const sprite = new THREE.Sprite(
+            new THREE.SpriteMaterial({ map: tex, transparent: true })
+        );
+        sprite.scale.set(1.5, 0.3, 1);
+        sprite.position.y = 1.6;
+        group.add(sprite);
+        
+        return group;
+    }
+
+    function updateRemoteAvatar(id, data) {
+        if(!remoteAvatars[id]) {
+            const avatar = createAvatarMesh(id, data.color || '#00f3ff', data.name || 'Usuario');
+            scene.add(avatar);
+            remoteAvatars[id] = avatar;
+            updateCount();
+            addLog('RED', `${data.name || 'Usuario'} se unió`);
+        }
+        
+        const avatar = remoteAvatars[id];
+        avatar.position.set(data.x, data.y, data.z);
+        avatar.rotation.y = data.rotY || 0;
+        
+        if(avatar.userData.speakingIndicator) {
+            avatar.userData.speakingIndicator.material.opacity = data.isSpeaking ? 0.8 : 0;
+        }
+        
+        if(avatar.userData.ring) {
+            avatar.userData.ring.rotation.z += 0.02;
+        }
+    }
+
+    function updateCount() {
+        const count = Object.keys(remoteAvatars).length + 1;
+        document.getElementById('user-count').innerHTML = `👥 ${count} participante${count > 1 ? 's' : ''}`;
+    }
+
+    // --- LÓGICA DE RED (HOST/CLIENT) ---
+    function setupNetwork() {
+        document.getElementById('room-id').innerText = `ID: ${roomName}`;
+
         peer = new Peer(ROOM_ID);
 
-        peer.on('open', (id) => {
+        peer.on('open', () => {
             isHost = true;
-            document.getElementById('role-display').innerText = "HOST (SERVIDOR)";
-            document.getElementById('role-display').style.color = "#00ff00";
-            document.getElementById('net-status').classList.add('status-active');
-            addLog('RED', 'Sala creada. Esperando participantes...');
-            
-            // Habilitar botón de mute all solo para host
+            updateStatus('HOST (MODERADOR)', '#00ff00');
             document.getElementById('mute-all-btn').disabled = false;
+            addLog('RED', 'Sala creada. Esperando participantes...');
         });
 
         peer.on('error', (err) => {
-            if (err.type === 'unavailable-id') {
-                document.getElementById('role-display').innerText = "CLIENTE (GUEST)";
-                document.getElementById('role-display').style.color = "#00f3ff";
-                addLog('RED', 'Conectando como invitado...');
-                connectAsGuest();
+            if(err.type === 'unavailable-id') {
+                isHost = false;
+                updateStatus('CLIENTE (GUEST)', '#00f3ff');
+                connectAsGuest(ROOM_ID);
             } else {
                 addLog('ERROR', `Red: ${err.type}`);
             }
         });
 
         peer.on('connection', (conn) => {
-            setupConnection(conn);
+            setupConnEvents(conn);
             if(isHost) {
-                clientConnections.push(conn);
+                clientConns.push(conn);
+                updateCount();
                 addLog('RED', 'Participante conectado.');
-                // Sincronizar estado actual
                 if(pdfDoc || youtubeVideoId) {
                     setTimeout(() => {
-                        if(youtubeVideoId) sendTo(conn, { type: 'youtube', videoId: youtubeVideoId });
-                        if(pdfDoc) sendTo(conn, { type: 'sync-state', page: pageNum });
+                        if(youtubeVideoId) conn.send({ type: 'youtube', videoId: youtubeVideoId });
+                        if(pdfDoc) conn.send({ type: 'sync-pdf', page: pageNum });
                     }, 1000);
                 }
             }
         });
     }
 
-    function connectAsGuest() {
-        peer = new Peer();
-        peer.on('open', () => {
-            const conn = peer.connect(ROOM_ID);
-            setupConnection(conn);
-            myConnection = conn;
+    function connectAsGuest(hostId) {
+        const guestPeer = new Peer();
+        guestPeer.on('open', () => {
+            myConn = guestPeer.connect(hostId);
+            setupConnEvents(myConn);
+            addLog('RED', 'Conectando como invitado...');
         });
-        peer.on('error', (err) => {
+        guestPeer.on('error', (err) => {
             addLog('ERROR', `Conexión: ${err.type}`);
         });
     }
 
-    function setupConnection(conn) {
+    function setupConnEvents(conn) {
         conn.on('open', () => {
-            document.getElementById('net-status').classList.add('status-active');
             addLog('RED', 'Conectado a la sala');
-            // Enviar mi posición inicial
             broadcast({ 
                 type: 'avatar-pos', 
                 x: camera.position.x, 
@@ -549,110 +480,102 @@
                 name: 'Participante'
             });
         });
-
+        
         conn.on('data', (data) => {
             handleData(data);
-            if (isHost) {
-                clientConnections.forEach(c => {
-                    if (c.peer !== conn.peer) c.send(data);
-                });
-            }
+            if(isHost) clientConns.forEach(c => { if(c.peer !== conn.peer) c.send(data); });
         });
-        
         conn.on('close', () => {
             if(isHost) {
-                clientConnections = clientConnections.filter(c => c.peer !== conn.peer);
+                clientConns = clientConns.filter(c => c.peer !== conn.peer);
+                updateCount();
             }
-            removeRemoteAvatar(conn.peer);
+            if(remoteAvatars[conn.peer]) {
+                scene.remove(remoteAvatars[conn.peer]);
+                delete remoteAvatars[conn.peer];
+                addLog('RED', 'Usuario desconectado');
+            }
         });
     }
 
     function broadcast(data) {
         handleData(data);
-        if (isHost) {
-            clientConnections.forEach(c => c.send(data));
-        } else if (myConnection) {
-            myConnection.send(data);
-        }
-    }
-    
-    function sendTo(conn, data) {
-        conn.send(data);
+        if(isHost) clientConns.forEach(c => c.send(data));
+        else if(myConn) myConn.send(data);
     }
 
-    function handleData(data) {
-        switch(data.type) {
+    function handleData(d) {
+        switch(d.type) {
             case 'chat': 
-                addLog('CHAT', `<b style="color:#00f3ff">${data.user}:</b> ${data.text}`);
+                addLog('CHAT', `<b style="color:var(--neon)">${d.user}:</b> ${d.text}`);
                 break;
-            case 'laser':
-                laserPoint.position.copy(data.pos);
-                laserPoint.position.z += 0.02;
-                laserPoint.visible = true;
+            case 'laser': 
+                laserPoint.position.copy(d.pos); 
+                laserPoint.visible = true; 
                 break;
-            case 'laser-off':
-                laserPoint.visible = false;
+            case 'laser-off': 
+                laserPoint.visible = false; 
                 break;
-            case 'pdf-img':
-                updateDashboard(data.img);
+            case 'pdf-img': 
+                updateDashboard(d.img, d.page); 
                 break;
-            case 'set-page':
-                pageNum = data.page;
-                document.getElementById('page-display').innerText = `PAG ${pageNum}`;
+            case 'timer': 
+                timeLeft = d.sec; 
+                updateTimerDisplay(); 
                 break;
-            case 'timer':
-                timeLeft = data.seconds;
-                updateTimerDisplay();
-                break;
-            case 'sync-state':
-                pageNum = data.page;
-                document.getElementById('page-display').innerText = `PAG ${pageNum}`;
-                addLog('SYNC', `Página ${pageNum}`);
+            case 'sync-pdf': 
+                pageNum = d.page; 
+                document.getElementById('page-num').innerText = `PAG ${pageNum} / ${pdfDoc ? pdfDoc.numPages : 1}`;
                 break;
             case 'avatar-pos':
-                updateRemoteAvatar(data.id || Date.now().toString(), { x: data.x, y: data.y, z: data.z, name: data.name, color: data.color, rotY: data.rotY, isSpeaking: data.isSpeaking });
+                updateRemoteAvatar(d.id || Date.now().toString(), { x: d.x, y: d.y, z: d.z, name: d.name, color: d.color, rotY: d.rotY, isSpeaking: d.isSpeaking });
                 break;
             case 'youtube':
-                loadYouTubeVideo(data.videoId);
-                addLog('VIDEO', `YouTube: ${data.videoId}`);
+                loadYouTubeVideo(d.videoId);
+                addLog('VIDEO', `YouTube: ${d.videoId}`);
                 break;
             case 'mute-all':
-                handleMuteAll(data.muted);
+                handleMuteAll(d.muted);
                 break;
             case 'speaking':
-                // Actualizar indicador de hablando
-                if(data.id && remoteAvatars[data.id] && remoteAvatars[data.id].userData.speakingIndicator) {
-                    remoteAvatars[data.id].userData.speakingIndicator.material.opacity = data.isSpeaking ? 0.8 : 0;
+                if(d.id && remoteAvatars[d.id] && remoteAvatars[d.id].userData.speakingIndicator) {
+                    remoteAvatars[d.id].userData.speakingIndicator.material.opacity = d.isSpeaking ? 0.8 : 0;
                 }
                 break;
         }
     }
 
-    // --- PDF DE ALTA CALIDAD ---
-    async function renderPage() {
+    function updateStatus(status, color) {
+        document.getElementById('role-tag').innerText = status;
+        document.getElementById('role-tag').style.color = color;
+    }
+
+    // --- PDF HD ---
+    async function renderPDF() {
         if(!pdfDoc) return;
         const page = await pdfDoc.getPage(pageNum);
         const canvas = document.getElementById('pdf-canvas');
         const ctx = canvas.getContext('2d');
+        const viewport = page.getViewport({ scale: 3 }); // CALIDAD HD
+        canvas.width = viewport.width; canvas.height = viewport.height;
         
-        // ALTA RESOLUCIÓN para PDFs nítidos
-        const scale = 4; // Mayor escala = mejor calidad
-        const viewport = page.getViewport({ scale });
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const img = canvas.toDataURL('image/jpeg', 0.85);
         
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        
-        await page.render({ 
-            canvasContext: ctx, 
-            viewport: viewport 
-        }).promise;
-        
-        const imgData = canvas.toDataURL('image/jpeg', 0.85);
-        
-        updateDashboard(imgData);
-        document.getElementById('page-display').innerText = `PAG ${pageNum}`;
-        
-        broadcast({ type: 'pdf-img', img: imgData });
+        updateDashboard(img, pageNum);
+        broadcast({ type: 'pdf-img', img: img, page: pageNum });
+    }
+
+    function updateDashboard(img, pg) {
+        new THREE.TextureLoader().load(img, tex => {
+            dashboard.material.map = tex;
+            dashboard.material.opacity = 1;
+            dashboard.material.needsUpdate = true;
+            tex.minFilter = THREE.LinearFilter;
+            tex.magFilter = THREE.LinearFilter;
+            tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+            document.getElementById('page-num').innerText = `PAG ${pg} / ${pdfDoc ? pdfDoc.numPages : 1}`;
+        });
     }
 
     function changePage(delta) {
@@ -660,22 +583,9 @@
         const newPage = Math.max(1, Math.min(pdfDoc.numPages, pageNum + delta));
         if(newPage !== pageNum) {
             pageNum = newPage;
-            renderPage();
+            renderPDF();
             addLog('DOC', `Página ${pageNum}`);
         }
-    }
-
-    function updateDashboard(img) {
-        new THREE.TextureLoader().load(img, (tex) => {
-            dashboard.material.map = tex;
-            dashboard.material.opacity = 1;
-            dashboard.material.needsUpdate = true;
-            
-            // Configurar filtros para nitidez
-            tex.minFilter = THREE.LinearFilter;
-            tex.magFilter = THREE.LinearFilter;
-            tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-        });
     }
 
     document.getElementById('pdf-upload').addEventListener('change', async (e) => {
@@ -686,7 +596,7 @@
             try {
                 pdfDoc = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
                 pageNum = 1;
-                renderPage();
+                renderPDF();
                 addLog('DOC', `PDF: ${file.name}`);
                 showNotification(`PDF cargado: ${file.name}`);
             } catch(e) { 
@@ -697,7 +607,7 @@
     });
 
     // --- YOUTUBE ---
-    function loadYouTube() {
+    function loadYT() {
         const url = document.getElementById('yt-url').value.trim();
         if(!url) return;
         
@@ -719,86 +629,49 @@
 
     function loadYouTubeVideo(videoId) {
         youtubeVideoId = videoId;
-        
-        // Desactivar YouTube anterior
         isYouTubeActive = false;
         document.body.classList.remove('youtube-active');
         
-        // Remover YouTube anterior
         const oldObj = scene.getObjectByName('youtube3d');
         if(oldObj) scene.remove(oldObj);
         
-        // Remover PDF
         if(dashboard.material.map) {
             dashboard.material.map.dispose();
             dashboard.material.map = null;
             dashboard.material.opacity = 0.15;
         }
         
-        // Crear elemento YouTube
         const div = document.createElement('div');
-        div.className = 'yt-container';
+        div.style.cssText = 'width: 720px; height: 405px; background: #000; border-radius: 8px; overflow: hidden; position: relative;';
         
-        // Crear iframe con manejo de errores
         const iframe = document.createElement('iframe');
         iframe.src = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
         iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
         iframe.allowFullscreen = true;
-        
-        // Manejar error de X-Frame-Options
-        iframe.onload = function() {
-            // Verificar si el iframe se cargó correctamente
-            try {
-                // Si el contenido es accesible, verificar si hay un mensaje de error
-                if (iframe.contentDocument && iframe.contentDocument.body) {
-                    const bodyText = iframe.contentDocument.body.textContent || '';
-                    if (bodyText.includes('This video is not available') || 
-                        bodyText.includes('restringida') ||
-                        bodyText.includes('blocked')) {
-                        showYouTubeBlockedMessage(div);
-                    }
-                }
-            } catch (e) {
-                // Cross-origin, probablemente está bloqueado
-                console.log('No se puede acceder al contenido del iframe');
-            }
-        };
+        iframe.style.cssText = 'width: 100%; height: 100%; border: none;';
         
         iframe.onerror = function() {
-            showYouTubeBlockedMessage(div);
+            div.innerHTML = `
+                <div class="yt-blocked-message">
+                    <h3>⚠️ Video Bloqueado</h3>
+                    <p>Este video tiene restringida su incrustación. Ábrelo directamente en YouTube.</p>
+                    <button onclick="closeYouTube()">CERRAR</button>
+                </div>
+            `;
         };
         
         div.appendChild(iframe);
         
         const youtube3d = new THREE.CSS3DObject(div);
         youtube3d.name = 'youtube3d';
-        youtube3d.position.set(0, 2.8, -4.98);
+        youtube3d.position.set(0, 2.6, -3.98);
         youtube3d.scale.set(0.008, 0.008, 0.008);
         scene.add(youtube3d);
         
-        // Activar modo YouTube para permitir clics
         isYouTubeActive = true;
         document.body.classList.add('youtube-active');
         
         addLog('VIDEO', `Cargado: ${videoId}`);
-    }
-    
-    function showYouTubeBlockedMessage(container) {
-        // Limpiar el contenedor
-        container.innerHTML = '';
-        
-        // Crear mensaje de error
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'yt-blocked-message';
-        msgDiv.innerHTML = `
-            <h3>⚠️ Video Bloqueado</h3>
-            <p>Este video de YouTube tiene restringida su incrustación (X-Frame-Options).</p>
-            <p>Solución: Abre el video directamente en YouTube o usa un video diferente.</p>
-            <button class="try-again" onclick="closeYouTube()">CERRAR VIDEO</button>
-        `;
-        
-        container.appendChild(msgDiv);
-        addLog('VIDEO', 'Video bloqueado por restricciones de YouTube');
     }
     
     function closeYouTube() {
@@ -807,11 +680,10 @@
         youtubeVideoId = null;
         isYouTubeActive = false;
         document.body.classList.remove('youtube-active');
-        addLog('VIDEO', 'Video cerrado');
     }
 
     // --- INTERACCIONES ---
-    function setupInputs() {
+    function setupInteractions() {
         // Láser
         window.addEventListener('mousemove', (e) => {
             if(!pdfDoc && !youtubeVideoId) return;
@@ -852,13 +724,14 @@
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
             cssRenderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
         });
     }
 
     // --- TIMER ---
-    function setTimer(min) {
+    function sendTimer(min) {
         timeLeft = min * 60;
-        broadcast({ type: 'timer', seconds: timeLeft });
+        broadcast({ type: 'timer', sec: timeLeft });
         addLog('TIMER', `${min} minutos`);
     }
 
@@ -867,12 +740,175 @@
         const s = timeLeft % 60;
         const display = document.getElementById('timer-display');
         display.innerText = `${m}:${s.toString().padStart(2,'0')}`;
-        display.classList.toggle('timer-warning', timeLeft < 30 && timeLeft > 0);
+        display.style.color = timeLeft < 30 && timeLeft > 0 ? '#ff3333' : 'var(--neon)';
+        display.style.textShadow = timeLeft < 30 && timeLeft > 0 ? '0 0 15px #ff0000' : '0 0 10px var(--neon)';
     }
 
+    // --- AUDIO ---
+    async function unlockAudio() {
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if(audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            addLog('AUDIO', 'Contexto de audio desbloqueado');
+        } catch(e) {
+            addLog('AUDIO', 'Audio no disponible');
+        }
+    }
+
+    function toggleMic() {
+        if(!navigator.mediaDevices) {
+            showNotification("Audio requiere HTTPS");
+            return;
+        }
+        
+        if(audioStream) {
+            isMuted = !isMuted;
+            const tracks = audioStream.getAudioTracks();
+            tracks.forEach(track => track.enabled = !isMuted);
+            
+            const btn = document.getElementById('mic-btn');
+            if(isMuted) {
+                btn.textContent = '🔇 OFF';
+                btn.style.background = '#ff4444';
+                addLog('AUDIO', 'Silenciado');
+            } else {
+                btn.textContent = '🎤 ON';
+                btn.style.background = 'var(--neon-green)';
+                addLog('AUDIO', 'Micrófono activo');
+            }
+            
+            broadcast({ type: 'speaking', id: peer.id, isSpeaking: !isMuted });
+        } else {
+            navigator.mediaDevices.getUserMedia({ audio: true, echoCancellation: true, noiseSuppression: true })
+                .then(stream => {
+                    audioStream = stream;
+                    document.getElementById('mic-btn').textContent = '🎤 ON';
+                    document.getElementById('mic-btn').style.background = 'var(--neon-green)';
+                    addLog('AUDIO', 'Micrófono activado');
+                    showNotification('Micrófono activo');
+                    setupVoiceDetection(stream);
+                })
+                .catch(e => {
+                    addLog('ERROR', `Audio: ${e.message}`);
+                });
+        }
+    }
+    
+    function setupVoiceDetection(stream) {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let isSpeaking = false;
+        
+        function detect() {
+            if(!audioStream || isMuted) {
+                requestAnimationFrame(detect);
+                return;
+            }
+            
+            analyser.getByteFrequencyData(dataArray);
+            const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            const speaking = avg > 30 && !isMuted;
+            
+            if(speaking !== isSpeaking) {
+                isSpeaking = speaking;
+                broadcast({ type: 'speaking', id: peer.id, isSpeaking: speaking });
+            }
+            
+            requestAnimationFrame(detect);
+        }
+        detect();
+    }
+
+    function toggleMuteAll() {
+        if(!isHost) {
+            showNotification('Solo el HOST puede silenciar');
+            return;
+        }
+        
+        isMuted = !isMuted;
+        
+        if(audioStream) {
+            audioStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
+        }
+        
+        const btn = document.getElementById('mic-btn');
+        if(isMuted) {
+            btn.textContent = '🔇 OFF';
+            btn.style.background = '#ff4444';
+        } else {
+            btn.textContent = '🎤 ON';
+            btn.style.background = 'var(--neon-green)';
+        }
+        
+        broadcast({ type: 'mute-all', muted: isMuted });
+        addLog('AUDIO', isMuted ? 'Todos silenciados' : 'Audio activado');
+    }
+    
+    function handleMuteAll(muted) {
+        isMuted = muted;
+        
+        const btn = document.getElementById('mic-btn');
+        if(isMuted) {
+            btn.textContent = '🔇 OFF';
+            btn.style.background = '#ff4444';
+        } else {
+            btn.textContent = '🎤 ON';
+            btn.style.background = 'var(--neon-green)';
+        }
+        
+        if(audioStream) {
+            audioStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
+        }
+        
+        addLog('AUDIO', muted ? 'Silenciado por HOST' : 'Audio restaurado');
+    }
+
+    function addLog(type, msg) {
+        const t = new Date().toLocaleTimeString();
+        logs.push(`[${t}] ${type}: ${msg}`);
+        if(type === 'CHAT') {
+            const div = document.createElement('div');
+            div.innerHTML = `<span style="color:#666">${t}</span> ${msg}`;
+            document.getElementById('messages').appendChild(div);
+            document.getElementById('messages').scrollTop = 9999;
+        }
+    }
+
+    function exportLog() {
+        const blob = new Blob([logs.join('\n')], {type: 'text/plain'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Log_${roomName}_${new Date().toISOString().substr(0,10)}.txt`;
+        a.click();
+        addLog('LOG', 'Exportado');
+    }
+
+    function showNotification(msg) {
+        const notif = document.createElement('div');
+        notif.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,243,255,0.95);color:#000;padding:15px 30px;border-radius:8px;font-weight:bold;z-index:200;box-shadow:0 0 30px rgba(0,243,255,0.5);';
+        notif.textContent = msg;
+        document.body.appendChild(notif);
+        setTimeout(() => notif.remove(), 2500);
+    }
+
+    function startApp() {
+        document.getElementById('welcome-modal').style.display = 'none';
+        document.getElementById('hud').style.display = 'flex';
+        unlockAudio();
+        init3D();
+    }
+
+    // Loop principal
     setInterval(() => {
-        // Actualizar posición del avatar local
-        if(isHost || myConnection) {
+        // Actualizar avatar local
+        if(isHost || myConn) {
             broadcast({
                 type: 'avatar-pos',
                 id: peer.id,
@@ -890,16 +926,13 @@
             timeLeft--;
             updateTimerDisplay();
             if(isHost && timeLeft > 0 && timeLeft % 10 === 0) {
-                broadcast({ type: 'timer', seconds: timeLeft });
+                broadcast({ type: 'timer', sec: timeLeft });
             }
             if(timeLeft === 0) {
                 addLog('TIMER', '¡Tiempo agotado!');
                 showNotification('¡Tiempo agotado!');
             }
         }
-        
-        // Clock
-        document.getElementById('utc-clock').innerText = new Date().toISOString().replace('T', ' ').substr(0, 19) + " UTC";
         
         // Partículas
         if(scene.userData.particles) {
@@ -915,193 +948,23 @@
             });
             particles.geometry.attributes.position.needsUpdate = true;
         }
-    }, 1000);
-
-    function exportLog() {
-        const blob = new Blob([logs.join('\n')], {type: 'text/plain'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `Log_${roomName}_${new Date().toISOString().substr(0,10)}.txt`;
-        a.click();
-        addLog('LOG', 'Exportado');
-        showNotification('Log descargado');
-    }
-
-    // --- AUDIO Y MUTE ---
-    function toggleMic() {
-        if(!navigator.mediaDevices) {
-            showNotification("Audio requiere HTTPS");
-            return;
-        }
         
-        if(audioStream) {
-            // Silenciar/activar audio local
-            isMuted = !isMuted;
-            const tracks = audioStream.getAudioTracks();
-            tracks.forEach(track => {
-                track.enabled = !isMuted;
-            });
-            
-            const btn = document.getElementById('mic-btn');
-            if(isMuted) {
-                btn.textContent = '🔇 OFF';
-                btn.style.background = '#ff4444';
-                addLog('AUDIO', 'Micrófono silenciado');
-            } else {
-                btn.textContent = '🎤 ON';
-                btn.style.background = '#00ff88';
-                addLog('AUDIO', 'Micrófono activo');
-            }
-            
-            // Actualizar estado de hablando
-            broadcast({ type: 'speaking', id: peer.id, isSpeaking: !isMuted });
-        } else {
-            // Activar microphone por primera vez
-            navigator.mediaDevices.getUserMedia({ audio: true, echoCancellation: true, noiseSuppression: true })
-                .then(stream => {
-                    audioStream = stream;
-                    document.getElementById('mic-btn').textContent = '🎤 ON';
-                    document.getElementById('mic-btn').style.background = '#00ff88';
-                    addLog('AUDIO', 'Micrófono activado');
-                    showNotification('Micrófono activo');
-                    
-                    // Iniciar detección de voz para indicar cuando está hablando
-                    setupVoiceDetection(stream);
-                })
-                .catch(e => {
-                    addLog('ERROR', `Audio: ${e.message}`);
-                    showNotification('Error al activar micrófono');
-                });
-        }
-    }
-    
-    function setupVoiceDetection(stream) {
-        // Analizador de audio para detectar voz
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        let isCurrentlySpeaking = false;
-        
-        function detectVoice() {
-            if(!audioStream || isMuted) {
-                requestAnimationFrame(detectVoice);
-                return;
-            }
-            
-            analyser.getByteFrequencyData(dataArray);
-            const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
-            
-            const threshold = 30;
-            const nowSpeaking = average > threshold && !isMuted;
-            
-            if(nowSpeaking !== isCurrentlySpeaking) {
-                isCurrentlySpeaking = nowSpeaking;
-                broadcast({ type: 'speaking', id: peer.id, isSpeaking: nowSpeaking });
-                
-                // Actualizar indicador local
-                if(remoteAvatars[peer.id] && remoteAvatars[peer.id].userData.speakingIndicator) {
-                    remoteAvatars[peer.id].userData.speakingIndicator.material.opacity = nowSpeaking ? 0.8 : 0;
-                }
-            }
-            
-            requestAnimationFrame(detectVoice);
-        }
-        
-        detectVoice();
-    }
-
-    function toggleMuteAll() {
-        if(!isHost) {
-            showNotification('Solo el HOST puede silenciar');
-            return;
-        }
-        
-        isMuted = !isMuted;
-        
-        // Silenciar microphone local
-        if(audioStream) {
-            const tracks = audioStream.getAudioTracks();
-            tracks.forEach(track => {
-                track.enabled = !isMuted;
-            });
-            
-            const btn = document.getElementById('mic-btn');
-            if(isMuted) {
-                btn.textContent = '🔇 OFF';
-                btn.style.background = '#ff4444';
-            } else {
-                btn.textContent = '🎤 ON';
-                btn.style.background = '#00ff88';
-            }
-        }
-        
-        // Enviar comando a todos los clientes
-        broadcast({ type: 'mute-all', muted: isMuted });
-        
-        const status = isMuted ? 'TODOS SILENCIADOS' : 'AUDIO ACTIVADO';
-        addLog('AUDIO', status);
-        showNotification(status);
-    }
-    
-    function handleMuteAll(muted) {
-        isMuted = muted;
-        
-        // Actualizar botón local
-        const btn = document.getElementById('mic-btn');
-        if(isMuted) {
-            btn.textContent = '🔇 OFF';
-            btn.style.background = '#ff4444';
-        } else {
-            btn.textContent = '🎤 ON';
-            btn.style.background = '#00ff88';
-        }
-        
-        // Silenciar microphone si existe
-        if(audioStream) {
-            const tracks = audioStream.getAudioTracks();
-            tracks.forEach(track => {
-                track.enabled = !isMuted;
-            });
-        }
-        
-        const status = muted ? 'Silenciado por HOST' : 'Audio restaurado';
-        addLog('AUDIO', status);
-        showNotification(status);
-    }
-
-    function showNotification(msg) {
-        const notif = document.createElement('div');
-        notif.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,243,255,0.95);color:#000;padding:15px 30px;border-radius:8px;font-weight:bold;z-index:200;box-shadow:0 0 30px rgba(0,243,255,0.5);';
-        notif.textContent = msg;
-        document.body.appendChild(notif);
-        setTimeout(() => notif.remove(), 2500);
-    }
-
-    function animate() {
-        requestAnimationFrame(animate);
-        
-        // Animación flotante de la pantalla
-        if(dashboard) {
-            dashboard.position.y = 2.8 + Math.sin(Date.now() * 0.001) * 0.03;
-        }
-        
-        // Animar láseres de otros usuarios
+        // Animar anillos
         Object.values(remoteAvatars).forEach(avatar => {
             if(avatar.userData.ring) {
                 avatar.userData.ring.rotation.z += 0.015;
             }
         });
+    }, 1000);
+
+    function animate() {
+        requestAnimationFrame(animate);
         
-        renderer.render(scene, camera);
+        dashboard.position.y = 2.6 + Math.sin(Date.now() * 0.001) * 0.03;
+        
+        composer.render(scene, camera);
         cssRenderer.render(scene, camera);
     }
-
-    // Desactivar el modal por defecto hasta que el usuario haga clic
-    document.getElementById('welcome-modal').style.display = 'flex';
 </script>
 </body>
 </html>
