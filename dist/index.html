@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HoloMeet VR - Ultimate Executive Edition</title>
+    <title>HoloMeet VR - Professional Office</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
@@ -12,203 +12,358 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-    
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS3DRenderer.js"></script>
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.12.313/pdf.min.js"></script>
 
     <style>
-        :root { --neon: #00f3ff; --neon-red: #ff3333; --neon-green: #00ff88; }
-        body { margin: 0; overflow: hidden; background: #020205; font-family: 'Segoe UI', monospace; color: var(--neon); }
-        
-        /* HUD Holográfico (Estilo Premium) */
-        #hud { 
-            position: fixed; inset: 0; pointer-events: none; padding: 25px; z-index: 100;
-            display: flex; flex-direction: column; justify-content: space-between;
-            background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.4) 100%);
-        }
-        
-        /* Efecto de líneas de escaneo (Scanlines) */
-        #hud::before {
-            content: " "; position: fixed; inset: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
-                        linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-            background-size: 100% 3px, 3px 100%; pointer-events: none;
-            z-index: -1;
+        * { box-sizing: border-box; }
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #0a0a0f; 
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            color: #e0e0e0;
         }
 
-        .panel { 
-            background: rgba(0, 15, 30, 0.85); border: 1px solid var(--neon); 
-            padding: 15px; backdrop-filter: blur(12px); pointer-events: auto;
-            box-shadow: 0 0 20px rgba(0, 243, 255, 0.15); border-radius: 2px;
-            text-transform: uppercase; letter-spacing: 1px;
+        /* Pantalla de Entrada */
+        #entry-screen {
+            position: fixed; inset: 0; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        
+        #entry-screen.hidden { display: none; }
+
+        .entry-logo {
+            font-size: 48px; font-weight: 300; letter-spacing: 8px; color: #00d4ff;
+            margin-bottom: 10px; text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
         }
 
-        .top-bar { display: flex; justify-content: space-between; align-items: flex-start; }
-        #timer-display { font-size: 28px; font-weight: bold; color: var(--neon); text-shadow: 0 0 10px var(--neon); }
-        
-        button { 
-            background: transparent; color: var(--neon); border: 1px solid var(--neon); 
-            padding: 8px 15px; cursor: pointer; font-weight: bold; font-size: 10px;
-            transition: all 0.3s; margin: 2px;
+        .entry-subtitle {
+            font-size: 14px; color: #888; letter-spacing: 4px; margin-bottom: 40px;
         }
-        button:hover { background: var(--neon); color: #000; box-shadow: 0 0 15px var(--neon); }
-        button:disabled { opacity: 0.4; cursor: not-allowed; }
-        
-        #chat-box { width: 320px; height: 250px; display: flex; flex-direction: column; }
-        #messages { flex: 1; overflow-y: auto; font-size: 11px; margin-bottom: 10px; padding-right: 5px; }
-        input { background: rgba(0,0,0,0.5); border: 1px solid #004444; color: #fff; padding: 8px; width: 100%; }
-        
-        /* Modal de Bienvenida */
-        #welcome-modal {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 1000;
-            display: flex; align-items: center; justify-content: center; text-align: center;
+
+        .entry-info {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            padding: 20px 40px; border-radius: 8px; margin-bottom: 30px; text-align: center;
         }
-        .welcome-content {
-            background: rgba(5, 10, 20, 0.95); border: 2px solid var(--neon);
-            padding: 40px; max-width: 500px;
-            box-shadow: 0 0 50px rgba(0, 243, 255, 0.3); border-radius: 4px;
+
+        .entry-info label { display: block; font-size: 11px; color: #666; letter-spacing: 1px; margin-bottom: 5px; }
+        .entry-info .session-id { font-size: 24px; font-weight: 600; color: #00d4ff; }
+
+        .entry-btn {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            border: none; color: #000; padding: 18px 60px; font-size: 14px; font-weight: 600;
+            letter-spacing: 2px; cursor: pointer; border-radius: 4px;
+            transition: all 0.3s; text-transform: uppercase;
         }
-        .welcome-content h1 { color: var(--neon); margin-bottom: 20px; font-size: 28px; }
-        .welcome-content p { color: #ccc; margin-bottom: 15px; line-height: 1.6; text-align: left; }
-        .welcome-content ul { color: #ccc; text-align: left; margin-bottom: 25px; padding-left: 20px; }
-        .welcome-content li { margin-bottom: 8px; }
-        #enter-btn {
-            background: linear-gradient(135deg, var(--neon), #0088ff); color: #000;
-            padding: 15px 40px; font-size: 16px; border: none;
+        .entry-btn:hover {
+            transform: translateY(-2px); box-shadow: 0 10px 40px rgba(0, 212, 255, 0.4);
         }
-        #enter-btn:hover { box-shadow: 0 0 30px var(--neon); transform: scale(1.05); }
-        
+
+        .entry-footer {
+            position: absolute; bottom: 20px; font-size: 11px; color: #444; letter-spacing: 1px;
+        }
+
+        /* HUD Principal */
+        #hud {
+            position: fixed; inset: 0; pointer-events: none; padding: 20px; z-index: 100;
+            display: none; flex-direction: column; justify-content: space-between;
+        }
+
+        #hud.active { display: flex; }
+
+        .hud-top {
+            display: flex; justify-content: space-between; align-items: flex-start;
+        }
+
+        .status-panel {
+            background: rgba(10, 15, 25, 0.9); border: 1px solid rgba(0, 212, 255, 0.3);
+            padding: 15px 20px; border-radius: 4px; backdrop-filter: blur(10px);
+            min-width: 200px;
+        }
+
+        .status-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .status-row:last-child { border-bottom: none; }
+
+        .status-label { font-size: 10px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
+        .status-value { font-size: 13px; color: #00d4ff; font-weight: 500; }
+
+        .timer-panel {
+            background: rgba(10, 15, 25, 0.9); border: 1px solid rgba(0, 212, 255, 0.3);
+            padding: 15px 25px; border-radius: 4px; text-align: center;
+            backdrop-filter: blur(10px);
+        }
+
+        .timer-display {
+            font-size: 36px; font-weight: 300; color: #00d4ff; 
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5); margin-bottom: 10px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .timer-controls { display: flex; gap: 5px; justify-content: center; }
+
+        .timer-btn {
+            background: transparent; border: 1px solid rgba(0, 212, 255, 0.3); color: #888;
+            padding: 5px 12px; font-size: 10px; cursor: pointer; border-radius: 3px;
+            transition: all 0.2s; letter-spacing: 1px;
+        }
+        .timer-btn:hover { border-color: #00d4ff; color: #00d4ff; }
+
+        .hud-bottom {
+            display: flex; justify-content: space-between; align-items: flex-end;
+        }
+
+        .controls-panel {
+            background: rgba(10, 15, 25, 0.9); border: 1px solid rgba(0, 212, 255, 0.3);
+            padding: 15px 20px; border-radius: 4px; backdrop-filter: blur(10px);
+            display: flex; gap: 15px; align-items: center;
+        }
+
+        .control-btn {
+            background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3);
+            color: #00d4ff; padding: 10px 18px; font-size: 11px; cursor: pointer;
+            border-radius: 3px; transition: all 0.2s; letter-spacing: 1px;
+            white-space: nowrap;
+        }
+        .control-btn:hover {
+            background: rgba(0, 212, 255, 0.2); border-color: #00d4ff;
+        }
+        .control-btn.active {
+            background: rgba(0, 212, 255, 0.3); border-color: #00d4ff;
+        }
+        .control-btn.danger {
+            border-color: rgba(255, 80, 80, 0.5); color: #ff5050;
+        }
+        .control-btn.danger:hover { background: rgba(255, 80, 80, 0.2); }
+
+        .divider {
+            width: 1px; height: 30px; background: rgba(255,255,255,0.1);
+        }
+
+        .audio-controls { display: flex; gap: 5px; }
+
+        .audio-btn {
+            padding: 10px 15px; font-size: 11px; cursor: pointer; border-radius: 3px;
+            transition: all 0.2s; letter-spacing: 1px;
+        }
+        .audio-btn.mute {
+            background: rgba(255, 80, 80, 0.1); border: 1px solid rgba(255, 80, 80, 0.3);
+            color: #ff5050;
+        }
+        .audio-btn.speak {
+            background: rgba(0, 212, 255, 0.1); border: 1px solid rgba(0, 212, 255, 0.3);
+            color: #00d4ff;
+        }
+        .audio-btn:hover { opacity: 0.8; }
+
+        .chat-panel {
+            background: rgba(10, 15, 25, 0.9); border: 1px solid rgba(0, 212, 255, 0.3);
+            padding: 15px; border-radius: 4px; backdrop-filter: blur(10px);
+            width: 300px; max-height: 200px; display: flex; flex-direction: column;
+        }
+
+        .chat-messages {
+            flex: 1; overflow-y: auto; margin-bottom: 10px; font-size: 11px;
+        }
+        .chat-messages::-webkit-scrollbar { width: 4px; }
+        .chat-messages::-webkit-scrollbar-thumb { background: rgba(0, 212, 255, 0.3); }
+
+        .chat-message {
+            padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .chat-message .time { color: #555; font-size: 10px; margin-right: 8px; }
+        .chat-message .user { color: #00d4ff; font-weight: 500; margin-right: 5px; }
+
+        .chat-input {
+            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+            color: #e0e0e0; padding: 8px 12px; font-size: 11px; border-radius: 3px;
+            outline: none; width: 100%;
+        }
+        .chat-input:focus { border-color: rgba(0, 212, 255, 0.3); }
+
         /* Indicador de hablando */
         .speaking-indicator {
-            position: absolute; width: 20px; height: 20px;
-            background: var(--neon-green); border-radius: 50%;
-            box-shadow: 0 0 15px var(--neon-green); animation: speakingPulse 0.5s infinite;
+            position: absolute; width: 16px; height: 16px;
+            background: #00ff88; border-radius: 50%;
+            box-shadow: 0 0 15px #00ff88; animation: speakPulse 0.5s infinite;
             pointer-events: none; display: none;
         }
-        @keyframes speakingPulse {
+        @keyframes speakPulse {
             0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.3); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 0.8; }
         }
-        
+
         /* Cursor interactivo para YouTube */
         .youtube-active .webgl-canvas { pointer-events: none !important; }
         .youtube-active .css3d-canvas { pointer-events: auto !important; }
-        
+
         /* Mensaje de video bloqueado */
         .yt-blocked-message {
-            position: absolute; inset: 0; background: rgba(20, 20, 20, 0.95);
+            position: absolute; inset: 0; background: rgba(20, 20, 25, 0.95);
             display: flex; flex-direction: column; align-items: center; justify-content: center;
-            color: var(--neon-red); text-align: center; padding: 20px;
+            color: #ff5050; text-align: center; padding: 30px; border-radius: 8px;
         }
-        .yt-blocked-message h3 { color: var(--neon-red); margin-bottom: 15px; }
-        .yt-blocked-message p { color: #ccc; max-width: 400px; line-height: 1.5; }
-        .yt-blocked-message button { margin-top: 20px; background: var(--neon-red); color: #000; border: none; }
-        
+        .yt-blocked-message h3 { color: #ff5050; margin-bottom: 15px; }
+        .yt-blocked-message p { color: #888; max-width: 400px; line-height: 1.6; margin-bottom: 20px; }
+        .yt-blocked-message button {
+            background: #ff5050; border: none; color: #fff; padding: 10px 25px;
+            border-radius: 3px; cursor: pointer; letter-spacing: 1px;
+        }
+
         #pdf-canvas { display: none; }
+        #file-input { display: none; }
     </style>
 </head>
 <body>
 
-<div id="welcome-modal">
-    <div class="welcome-content">
-        <h1>HoloMeet VR</h1>
-        <p>Bienvenido a la sala de videoconferencias inmersiva. Antes de continuar:</p>
-        <ul>
-            <li>🎤 Usa auriculares para evitar eco y feedback de audio</li>
-            <li>🌐 Comparte el ID de sala con tus participantes</li>
-            <li>📺 Para videos de YouTube, usa enlaces públicos</li>
-            <li>⏰ Usa el temporizador para gestionar turnos</li>
-        </ul>
-        <button id="enter-btn" onclick="startApp()">ENTRAR A LA SALA</button>
+<!-- Pantalla de Entrada -->
+<div id="entry-screen">
+    <div class="entry-logo">HoloMeet VR</div>
+    <div class="entry-subtitle">PROFESSIONAL OFFICE</div>
+    
+    <div class="entry-info">
+        <label>COMPARTE</label>
+        <div class="session-id" id="session-display">---</div>
     </div>
+    
+    <button class="entry-btn" onclick="enterRoom()">ENTRAR</button>
+    
+    <div class="entry-footer">Created by MiniMax Agent</div>
 </div>
 
-<div id="hud" style="display:none;">
-    <div class="top-bar">
-        <div class="panel">
-            <div id="role-tag" style="font-size: 9px; margin-bottom: 5px; color: #888;">ESTADO DE RED</div>
-            <div id="room-id" style="font-size: 14px; font-weight: bold;">ID: ---</div>
-            <div id="user-count" style="font-size: 10px; margin-top: 5px; color: var(--neon);">👥 1 participante</div>
-        </div>
-        
-        <div class="panel" style="text-align:center;">
-            <div style="font-size: 9px; opacity: 0.7;">CONTROL DE TURNO</div>
-            <div id="timer-display">00:00</div>
-            <div style="display:flex; gap:5px; justify-content: center; margin-top: 5px;">
-                <button onclick="sendTimer(5)">5 MIN</button>
-                <button onclick="sendTimer(10)">10 MIN</button>
-                <button onclick="sendTimer(15)">15 MIN</button>
+<!-- HUD Principal -->
+<div id="hud">
+    <div class="hud-top">
+        <div class="status-panel">
+            <div class="status-row">
+                <span class="status-label">SESSION</span>
+                <span class="status-value" id="session-value">---</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">UTC</span>
+                <span class="status-value" id="utc-time">00:00:00</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">PARTICIPANTS</span>
+                <span class="status-value" id="participant-count">1</span>
             </div>
         </div>
 
-        <div id="chat-box" class="panel">
-            <div id="messages"></div>
-            <input type="text" id="chat-input" placeholder="Mensaje...">
+        <div class="timer-panel">
+            <div class="timer-display" id="timer-display">00:00</div>
+            <div class="timer-controls">
+                <button class="timer-btn" onclick="setTimer(5)">5M</button>
+                <button class="timer-btn" onclick="setTimer(10)">10M</button>
+                <button class="timer-btn" onclick="setTimer(15)">15M</button>
+            </div>
         </div>
     </div>
 
-    <div class="controls panel" style="display:flex; justify-content: center; gap: 20px; align-items: center; flex-wrap: wrap;">
-        <div>
-            <button onclick="document.getElementById('pdf-upload').click()">📂 PDF HD</button>
-            <input type="file" id="pdf-upload" accept=".pdf" style="display:none">
-        </div>
-        
-        <div style="display:flex; align-items:center; border-left: 1px solid #333; padding-left: 15px;">
-            <button onclick="changePage(-1)">◀</button>
-            <span id="page-num" style="margin: 0 15px; font-size: 14px; min-width: 80px; text-align:center;">PAG 1 / 1</span>
-            <button onclick="changePage(1)">▶</button>
+    <div class="hud-bottom">
+        <div class="controls-panel">
+            <button class="control-btn" onclick="toggleMic()">
+                <span id="mic-status">SILENCIADO</span>
+            </button>
+            
+            <div class="audio-controls">
+                <button class="audio-btn mute" id="push-talk" onmousedown="startTalking()" onmouseup="stopTalking()" onmouseleave="stopTalking()">
+                    HABLAR (PTT)
+                </button>
+            </div>
+
+            <div class="divider"></div>
+
+            <button class="control-btn" onclick="document.getElementById('file-input').click()">
+                SUBIR PDF
+            </button>
+            <input type="file" id="file-input" accept=".pdf" onchange="loadPDF(event)">
+
+            <div class="divider"></div>
+
+            <button class="control-btn" onclick="prevPage()">◀</button>
+            <span id="page-display" style="color: #00d4ff; font-size: 12px; min-width: 60px; text-align: center;">---</span>
+            <button class="control-btn" onclick="nextPage()">▶</button>
+
+            <div class="divider"></div>
+
+            <button class="control-btn" onclick="playPause()">▶</button>
+            <button class="control-btn" onclick="resetCamera()">RESET CAM</button>
         </div>
 
-        <div style="border-left: 1px solid #333; padding-left: 15px; display:flex; gap:5px;">
-            <input type="text" id="yt-url" placeholder="YouTube URL" style="width: 150px; font-size: 10px;">
-            <button onclick="loadYT()">▶ YT</button>
+        <div class="chat-panel">
+            <div class="chat-messages" id="chat-messages"></div>
+            <input type="text" class="chat-input" id="chat-input" placeholder="Escribe un mensaje..." onkeypress="handleChat(event)">
         </div>
-
-        <div style="border-left: 1px solid #333; padding-left: 15px;">
-            <button id="mic-btn" onclick="toggleMic()">🎤 OFF</button>
-        </div>
-        
-        <button id="mute-all-btn" onclick="toggleMuteAll()" style="border-color: #ff8800; color: #ff8800;" disabled>🔇 SILENCIAR</button>
-        
-        <button onclick="exportLog()" style="border-color: var(--neon-red); color: var(--neon-red);">💾 LOG</button>
     </div>
 </div>
 
-<div id="container"></div>
 <canvas id="pdf-canvas"></canvas>
 
 <script>
-    // --- CONFIGURACIÓN VISUAL PREMIUM ---
+    // === VARIABLES GLOBALES ===
     let scene, camera, renderer, composer, cssRenderer, dashboard, laserPoint;
     let peer, myConn, isHost = false, clientConns = [];
     let remoteAvatars = {};
-    let pdfDoc = null, pageNum = 1, logs = [], timeLeft = 0;
-    let audioContext = null, audioStream = null, isMuted = false;
+    let pdfDoc = null, pageNum = 1, pdfPages = 1;
+    let logs = [], timeLeft = 0;
+    let audioContext = null, audioStream = null, isMuted = true, isTalking = false;
     let youtubeVideoId = null, isYouTubeActive = false;
-    
+    let isPlaying = false;
+
+    // Configuración de sala
     const urlParams = new URLSearchParams(location.search);
-    const roomName = urlParams.get('room') || 'DEMO';
-    const ROOM_ID = 'HM-ULTIMATE-' + roomName;
+    const roomName = urlParams.get('room') || 'MAIN';
+    const ROOM_ID = 'HM-OFFICE-' + roomName;
+
+    // === INICIALIZACIÓN ===
+    function enterRoom() {
+        document.getElementById('entry-screen').classList.add('hidden');
+        document.getElementById('hud').classList.add('active');
+        document.getElementById('session-display').textContent = roomName;
+        document.getElementById('session-value').textContent = roomName;
+        
+        unlockAudio();
+        init3D();
+    }
+
+    async function unlockAudio() {
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if(audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            addLog('AUDIO', 'Sistema de audio activado');
+        } catch(e) {
+            addLog('AUDIO', 'Audio no disponible');
+        }
+    }
 
     function init3D() {
         scene = new THREE.Scene();
-        scene.fog = new THREE.Fog(0x020205, 5, 25);
+        scene.background = new THREE.Color(0x0a0a0f);
+        scene.fog = new THREE.Fog(0x0a0a0f, 8, 40);
 
         camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.8, 7);
+        camera.position.set(0, 1.7, 8);
 
         renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.2;
+        renderer.toneMappingExposure = 1.0;
         renderer.domElement.classList.add('webgl-canvas');
         renderer.domElement.style.position = 'absolute';
         renderer.domElement.style.top = '0';
         renderer.domElement.style.pointerEvents = 'none';
-        document.getElementById('container').appendChild(renderer.domElement);
+        document.body.appendChild(renderer.domElement);
 
-        // CSS3D Renderer para YouTube
         cssRenderer = new THREE.CSS3DRenderer();
         cssRenderer.setSize(window.innerWidth, window.innerHeight);
         cssRenderer.domElement.classList.add('css3d-canvas');
@@ -217,92 +372,286 @@
         cssRenderer.domElement.style.pointerEvents = 'none';
         document.body.appendChild(cssRenderer.domElement);
 
-        // --- POST-PROCESAMIENTO (BLOOM/BRILLO) ---
+        // Post-procesamiento Bloom
         const renderScene = new THREE.RenderPass(scene, camera);
-        const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-        bloomPass.threshold = 0.21;
-        bloomPass.strength = 1.2; // Intensidad del brillo neón
-        bloomPass.radius = 0.55;
+        const bloomPass = new THREE.UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            0.8, 0.4, 0.85
+        );
+        bloomPass.threshold = 0.3;
+        bloomPass.strength = 0.6;
+        bloomPass.radius = 0.5;
 
         composer = new THREE.EffectComposer(renderer);
         composer.addPass(renderScene);
         composer.addPass(bloomPass);
 
-        // --- MATERIALES PREMIUM ---
-        const floorMat = new THREE.MeshPhysicalMaterial({ 
-            color: 0x080808, metalness: 0.9, roughness: 0.1, 
-            clearcoat: 1, clearcoatRoughness: 0.05, reflectivity: 1 
-        });
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(50, 50), floorMat);
-        floor.rotation.x = -Math.PI/2;
-        scene.add(floor);
-
-        dashboard = new THREE.Mesh(
-            new THREE.PlaneGeometry(6.4, 3.6),
-            new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.15, side: THREE.DoubleSide })
-        );
-        dashboard.position.set(0, 2.6, -4);
-        scene.add(dashboard);
-
-        // Marco de la pantalla
-        const frame = new THREE.Mesh(
-            new THREE.BoxGeometry(6.8, 4.0, 0.1),
-            new THREE.MeshStandardMaterial({ color: 0x1a1a1a, metalness: 0.9, roughness: 0.2 })
-        );
-        frame.position.set(0, 2.6, -4.1);
-        scene.add(frame);
-
-        // Láser Neón
-        laserPoint = new THREE.Mesh(
-            new THREE.SphereGeometry(0.04),
-            new THREE.MeshBasicMaterial({ color: 0xff0000 })
-        );
-        laserPoint.visible = false;
-        scene.add(laserPoint);
-
-        // Iluminación Pro
-        const ambient = new THREE.HemisphereLight(0x00f3ff, 0x000000, 0.4);
-        scene.add(ambient);
-        
-        const rectLight = new THREE.RectAreaLight(0x00f3ff, 5, 10, 10);
-        rectLight.position.set(0, 5, -2);
-        rectLight.lookAt(0,0,0);
-        scene.add(rectLight);
-
-        const spotLight = new THREE.SpotLight(0xffffff, 1, 20, Math.PI/6, 0.5);
-        spotLight.position.set(0, 8, 0);
-        spotLight.target.position.set(0, 0, 0);
-        scene.add(spotLight);
-        scene.add(spotLight.target);
-
-        // Partículas ambientales
-        createParticles();
-
+        createRoom();
         setupNetwork();
         setupInteractions();
         animate();
         
-        addLog('SYSTEM', 'Sala HoloMeet VR inicializada');
+        addLog('SYSTEM', 'Sala profesional inicializada');
+    }
+
+    // === CREACIÓN DE LA SALA PROFESIONAL ===
+    function createRoom() {
+        // Suelo de madera
+        const floorTexture = createWoodTexture();
+        const floorMat = new THREE.MeshStandardMaterial({ 
+            map: floorTexture,
+            roughness: 0.4,
+            metalness: 0.1
+        });
+        const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // Paredes
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.8 });
+        
+        // Pared trasera
+        const backWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 8), wallMat);
+        backWall.position.set(0, 4, -10);
+        scene.add(backWall);
+
+        // Paredes laterales
+        const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(20, 8), wallMat);
+        leftWall.rotation.y = Math.PI / 2;
+        leftWall.position.set(-15, 4, 0);
+        scene.add(leftWall);
+
+        const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(20, 8), wallMat);
+        rightWall.rotation.y = -Math.PI / 2;
+        rightWall.position.set(15, 4, 0);
+        scene.add(rightWall);
+
+        // Techo
+        const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x0f0f15, roughness: 0.9 });
+        const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(30, 20), ceilingMat);
+        ceiling.rotation.x = Math.PI / 2;
+        ceiling.position.set(0, 8, 0);
+        scene.add(ceiling);
+
+        // Pantalla de presentación
+        dashboard = new THREE.Mesh(
+            new THREE.PlaneGeometry(5, 3),
+            new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.1 })
+        );
+        dashboard.position.set(0, 3, -9.5);
+        scene.add(dashboard);
+
+        // Marco de la pantalla
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x222233, metalness: 0.8, roughness: 0.2 });
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(5.4, 3.4, 0.1), frameMat);
+        frame.position.set(0, 3, -9.6);
+        scene.add(frame);
+
+        // Mesa de conferencias
+        createConferenceTable();
+
+        // Sillas ejecutivas
+        createExecutiveChairs();
+
+        // Iluminación profesional
+        setupLighting();
+
+        // Puntero láser
+        laserPoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.03),
+            new THREE.MeshBasicMaterial({ color: 0xff3333 })
+        );
+        laserPoint.visible = false;
+        scene.add(laserPoint);
+
+        // Partículas ambientales
+        createParticles();
+    }
+
+    function createWoodTexture() {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512; canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+        
+        // Fondo madera oscura
+        ctx.fillStyle = '#2a2520';
+        ctx.fillRect(0, 0, 512, 512);
+        
+        // Líneas de madera
+        ctx.strokeStyle = '#3a3530';
+        ctx.lineWidth = 2;
+        for(let i = 0; i < 50; i++) {
+            ctx.beginPath();
+            ctx.moveTo(0, Math.random() * 512);
+            ctx.bezierCurveTo(
+                150, Math.random() * 512,
+                350, Math.random() * 512,
+                512, Math.random() * 512
+            );
+            ctx.stroke();
+        }
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(4, 4);
+        return texture;
+    }
+
+    function createConferenceTable() {
+        const tableMat = new THREE.MeshStandardMaterial({ 
+            color: 0x1a1410, 
+            roughness: 0.3, 
+            metalness: 0.1 
+        });
+
+        // Tablero de la mesa
+        const tableTop = new THREE.Mesh(
+            new THREE.BoxGeometry(4, 0.1, 2),
+            tableMat
+        );
+        tableTop.position.set(0, 0.8, 0);
+        tableTop.castShadow = true;
+        tableTop.receiveShadow = true;
+        scene.add(tableTop);
+
+        // Patas de la mesa
+        const legMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8, roughness: 0.2 });
+        const legPositions = [
+            [-1.8, 0.4, -0.8], [1.8, 0.4, -0.8],
+            [-1.8, 0.4, 0.8], [1.8, 0.4, 0.8]
+        ];
+        
+        legPositions.forEach(pos => {
+            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8, 16), legMat);
+            leg.position.set(...pos);
+            leg.castShadow = true;
+            scene.add(leg);
+        });
+    }
+
+    function createExecutiveChairs() {
+        const chairMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 });
+        const metalMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.9, roughness: 0.2 });
+
+        const chairPositions = [
+            { x: -1.2, z: 2, rotY: 0 },
+            { x: 0, z: 2.5, rotY: 0 },
+            { x: 1.2, z: 2, rotY: 0 },
+            { x: -1.5, z: 1.2, rotY: 0.3 },
+            { x: 1.5, z: 1.2, rotY: -0.3 },
+            { x: -1.2, z: -1.5, rotY: Math.PI },
+            { x: 0, z: -1.8, rotY: Math.PI },
+            { x: 1.2, z: -1.5, rotY: Math.PI }
+        ];
+
+        chairPositions.forEach(pos => {
+            const chair = createChair(chairMat, metalMat);
+            chair.position.set(pos.x, 0, pos.z);
+            chair.rotation.y = pos.rotY;
+            scene.add(chair);
+        });
+    }
+
+    function createChair(paddingMat, metalMat) {
+        const group = new THREE.Group();
+
+        // Asiento
+        const seat = new THREE.Mesh(
+            new THREE.BoxGeometry(0.5, 0.08, 0.5),
+            paddingMat
+        );
+        seat.position.y = 0.5;
+        group.add(seat);
+
+        // Respaldo
+        const backrest = new THREE.Mesh(
+            new THREE.BoxGeometry(0.5, 0.6, 0.06),
+            paddingMat
+        );
+        backrest.position.set(0, 0.85, -0.22);
+        group.add(backrest);
+
+        // Base
+        const base = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.25, 0.25, 0.05, 16),
+            metalMat
+        );
+        base.position.y = 0.025;
+        group.add(base);
+
+        // Columna
+        const column = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.03, 0.03, 0.45, 8),
+            metalMat
+        );
+        column.position.y = 0.275;
+        group.add(column);
+
+        // Ruedas (simplificado)
+        for(let i = 0; i < 5; i++) {
+            const wheel = new THREE.Mesh(
+                new THREE.SphereGeometry(0.03),
+                metalMat
+            );
+            const angle = (i / 5) * Math.PI * 2;
+            wheel.position.set(Math.cos(angle) * 0.2, 0.03, Math.sin(angle) * 0.2);
+            group.add(wheel);
+        }
+
+        return group;
+    }
+
+    function setupLighting() {
+        // Luz ambiental
+        const ambient = new THREE.AmbientLight(0x404050, 0.4);
+        scene.add(ambient);
+
+        // Luz principal (lámpara de la sala)
+        const mainLight = new THREE.SpotLight(0xffffff, 1.5, 15, Math.PI/4, 0.3);
+        mainLight.position.set(0, 7, 0);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        scene.add(mainLight);
+        scene.add(mainLight.target);
+        mainLight.target.position.set(0, 0, 0);
+
+        // Luces de acento cian
+        const rectLight = new THREE.RectAreaLight(0x00d4ff, 2, 8, 4);
+        rectLight.position.set(0, 5, -8);
+        rectLight.lookAt(0, 2, 0);
+        scene.add(rectLight);
+
+        // Luces de punto
+        const pointLight1 = new THREE.PointLight(0x00d4ff, 0.3, 10);
+        pointLight1.position.set(-5, 3, -5);
+        scene.add(pointLight1);
+
+        const pointLight2 = new THREE.PointLight(0x00d4ff, 0.3, 10);
+        pointLight2.position.set(5, 3, -5);
+        scene.add(pointLight2);
     }
 
     function createParticles() {
-        const particleCount = 200;
+        const particleCount = 100;
         const positions = new Float32Array(particleCount * 3);
         
         for(let i = 0; i < particleCount * 3; i += 3) {
-            positions[i] = (Math.random() - 0.5) * 30;
-            positions[i + 1] = Math.random() * 5 + 0.5;
-            positions[i + 2] = (Math.random() - 0.5) * 30;
+            positions[i] = (Math.random() - 0.5) * 20;
+            positions[i + 1] = Math.random() * 6 + 1;
+            positions[i + 2] = (Math.random() - 0.5) * 20;
         }
         
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         
         const material = new THREE.PointsMaterial({
-            color: 0x00f3ff,
-            size: 0.03,
+            color: 0x00d4ff,
+            size: 0.02,
             transparent: true,
-            opacity: 0.5,
+            opacity: 0.4,
             blending: THREE.AdditiveBlending
         });
         
@@ -311,9 +660,9 @@
         
         for(let i = 0; i < particleCount; i++) {
             particles.userData.velocities.push({
-                y: Math.random() * 0.005 + 0.002,
-                x: (Math.random() - 0.5) * 0.002,
-                z: (Math.random() - 0.5) * 0.002
+                y: Math.random() * 0.002,
+                x: (Math.random() - 0.5) * 0.001,
+                z: (Math.random() - 0.5) * 0.001
             });
         }
         
@@ -321,71 +670,52 @@
         scene.userData.particles = particles;
     }
 
-    // --- SISTEMA DE AVATARES ---
+    // === SISTEMA DE AVATARES ===
     function createAvatarMesh(id, color, name) {
         const group = new THREE.Group();
         
+        // Cuerpo
         const body = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.2, 0.25, 0.8, 32),
-            new THREE.MeshStandardMaterial({ 
-                color: color, 
-                metalness: 0.6, 
-                roughness: 0.3,
-                emissive: color,
-                emissiveIntensity: 0.2
-            })
+            new THREE.CylinderGeometry(0.15, 0.18, 0.7, 16),
+            new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.3 })
         );
-        body.position.y = 0.4;
+        body.position.y = 0.35;
         group.add(body);
         
+        // Cabeza
         const head = new THREE.Mesh(
-            new THREE.SphereGeometry(0.18, 32, 32),
-            new THREE.MeshStandardMaterial({ color: 0xffe4c4, metalness: 0.1, roughness: 0.6 })
+            new THREE.SphereGeometry(0.12, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0xddc8a8, roughness: 0.6 })
         );
-        head.position.y = 1.1;
+        head.position.y = 0.85;
         group.add(head);
         
-        const ring = new THREE.Mesh(
-            new THREE.TorusGeometry(0.35, 0.015, 8, 64),
-            new THREE.MeshBasicMaterial({ color: 0x00f3ff, transparent: true, opacity: 0.8 })
-        );
-        ring.rotation.x = Math.PI / 2;
-        ring.position.y = 0.15;
-        group.add(ring);
-        group.userData.ring = ring;
-        
+        // Indicador de hablando
         const speakingIndicator = new THREE.Mesh(
-            new THREE.SphereGeometry(0.12, 16, 16),
-            new THREE.MeshBasicMaterial({ 
-                color: 0x00ff88, 
-                transparent: true, 
-                opacity: 0,
-                depthTest: false
-            })
+            new THREE.SphereGeometry(0.08, 8, 8),
+            new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0, depthTest: false })
         );
-        speakingIndicator.position.y = 1.5;
+        speakingIndicator.position.y = 1.1;
         speakingIndicator.renderOrder = 999;
         group.add(speakingIndicator);
         group.userData.speakingIndicator = speakingIndicator;
         
         // Etiqueta con nombre
         const canvas = document.createElement('canvas');
-        canvas.width = 256; canvas.height = 48;
+        canvas.width = 200; canvas.height = 36;
         const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.roundRect(0, 0, 256, 48, 8);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.roundRect(0, 0, 200, 36, 4);
         ctx.fill();
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 20px Arial';
+        ctx.font = 'bold 14px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(name, 128, 32);
+        ctx.fillText(name, 100, 24);
         
         const tex = new THREE.CanvasTexture(canvas);
-        const sprite = new THREE.Sprite(
-            new THREE.SpriteMaterial({ map: tex, transparent: true })
-        );
-        sprite.scale.set(1.5, 0.3, 1);
-        sprite.position.y = 1.6;
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+        sprite.scale.set(1.2, 0.25, 1);
+        sprite.position.y = 1.2;
         group.add(sprite);
         
         return group;
@@ -393,10 +723,10 @@
 
     function updateRemoteAvatar(id, data) {
         if(!remoteAvatars[id]) {
-            const avatar = createAvatarMesh(id, data.color || '#00f3ff', data.name || 'Usuario');
+            const avatar = createAvatarMesh(id, data.color || '#00d4ff', data.name || 'Usuario');
             scene.add(avatar);
             remoteAvatars[id] = avatar;
-            updateCount();
+            updateParticipantCount();
             addLog('RED', `${data.name || 'Usuario'} se unió`);
         }
         
@@ -405,36 +735,27 @@
         avatar.rotation.y = data.rotY || 0;
         
         if(avatar.userData.speakingIndicator) {
-            avatar.userData.speakingIndicator.material.opacity = data.isSpeaking ? 0.8 : 0;
-        }
-        
-        if(avatar.userData.ring) {
-            avatar.userData.ring.rotation.z += 0.02;
+            avatar.userData.speakingIndicator.material.opacity = data.isSpeaking ? 0.9 : 0;
         }
     }
 
-    function updateCount() {
+    function updateParticipantCount() {
         const count = Object.keys(remoteAvatars).length + 1;
-        document.getElementById('user-count').innerHTML = `👥 ${count} participante${count > 1 ? 's' : ''}`;
+        document.getElementById('participant-count').textContent = count;
     }
 
-    // --- LÓGICA DE RED (HOST/CLIENT) ---
+    // === RED ===
     function setupNetwork() {
-        document.getElementById('room-id').innerText = `ID: ${roomName}`;
-
         peer = new Peer(ROOM_ID);
 
         peer.on('open', () => {
             isHost = true;
-            updateStatus('HOST (MODERADOR)', '#00ff00');
-            document.getElementById('mute-all-btn').disabled = false;
             addLog('RED', 'Sala creada. Esperando participantes...');
         });
 
         peer.on('error', (err) => {
             if(err.type === 'unavailable-id') {
                 isHost = false;
-                updateStatus('CLIENTE (GUEST)', '#00f3ff');
                 connectAsGuest(ROOM_ID);
             } else {
                 addLog('ERROR', `Red: ${err.type}`);
@@ -445,14 +766,8 @@
             setupConnEvents(conn);
             if(isHost) {
                 clientConns.push(conn);
-                updateCount();
+                updateParticipantCount();
                 addLog('RED', 'Participante conectado.');
-                if(pdfDoc || youtubeVideoId) {
-                    setTimeout(() => {
-                        if(youtubeVideoId) conn.send({ type: 'youtube', videoId: youtubeVideoId });
-                        if(pdfDoc) conn.send({ type: 'sync-pdf', page: pageNum });
-                    }, 1000);
-                }
             }
         });
     }
@@ -464,31 +779,23 @@
             setupConnEvents(myConn);
             addLog('RED', 'Conectando como invitado...');
         });
-        guestPeer.on('error', (err) => {
-            addLog('ERROR', `Conexión: ${err.type}`);
-        });
     }
 
     function setupConnEvents(conn) {
         conn.on('open', () => {
             addLog('RED', 'Conectado a la sala');
-            broadcast({ 
-                type: 'avatar-pos', 
-                x: camera.position.x, 
-                y: camera.position.y, 
-                z: camera.position.z,
-                name: 'Participante'
-            });
+            broadcast({ type: 'avatar-pos', x: camera.position.x, y: camera.position.y, z: camera.position.z, name: 'Participante' });
         });
         
         conn.on('data', (data) => {
             handleData(data);
             if(isHost) clientConns.forEach(c => { if(c.peer !== conn.peer) c.send(data); });
         });
+        
         conn.on('close', () => {
             if(isHost) {
                 clientConns = clientConns.filter(c => c.peer !== conn.peer);
-                updateCount();
+                updateParticipantCount();
             }
             if(remoteAvatars[conn.peer]) {
                 scene.remove(remoteAvatars[conn.peer]);
@@ -506,26 +813,22 @@
 
     function handleData(d) {
         switch(d.type) {
-            case 'chat': 
-                addLog('CHAT', `<b style="color:var(--neon)">${d.user}:</b> ${d.text}`);
+            case 'chat':
+                addChatMessage(d.user, d.text);
                 break;
-            case 'laser': 
-                laserPoint.position.copy(d.pos); 
-                laserPoint.visible = true; 
+            case 'laser':
+                laserPoint.position.copy(d.pos);
+                laserPoint.visible = true;
                 break;
-            case 'laser-off': 
-                laserPoint.visible = false; 
+            case 'laser-off':
+                laserPoint.visible = false;
                 break;
-            case 'pdf-img': 
-                updateDashboard(d.img, d.page); 
+            case 'pdf-img':
+                updateDashboard(d.img, d.page, d.total);
                 break;
-            case 'timer': 
-                timeLeft = d.sec; 
-                updateTimerDisplay(); 
-                break;
-            case 'sync-pdf': 
-                pageNum = d.page; 
-                document.getElementById('page-num').innerText = `PAG ${pageNum} / ${pdfDoc ? pdfDoc.numPages : 1}`;
+            case 'timer':
+                timeLeft = d.sec;
+                updateTimerDisplay();
                 break;
             case 'avatar-pos':
                 updateRemoteAvatar(d.id || Date.now().toString(), { x: d.x, y: d.y, z: d.z, name: d.name, color: d.color, rotY: d.rotY, isSpeaking: d.isSpeaking });
@@ -534,99 +837,190 @@
                 loadYouTubeVideo(d.videoId);
                 addLog('VIDEO', `YouTube: ${d.videoId}`);
                 break;
-            case 'mute-all':
-                handleMuteAll(d.muted);
-                break;
             case 'speaking':
                 if(d.id && remoteAvatars[d.id] && remoteAvatars[d.id].userData.speakingIndicator) {
-                    remoteAvatars[d.id].userData.speakingIndicator.material.opacity = d.isSpeaking ? 0.8 : 0;
+                    remoteAvatars[d.id].userData.speakingIndicator.material.opacity = d.isSpeaking ? 0.9 : 0;
                 }
                 break;
         }
     }
 
-    function updateStatus(status, color) {
-        document.getElementById('role-tag').innerText = status;
-        document.getElementById('role-tag').style.color = color;
-    }
-
-    // --- PDF HD ---
-    async function renderPDF() {
-        if(!pdfDoc) return;
-        const page = await pdfDoc.getPage(pageNum);
-        const canvas = document.getElementById('pdf-canvas');
-        const ctx = canvas.getContext('2d');
-        const viewport = page.getViewport({ scale: 3 }); // CALIDAD HD
-        canvas.width = viewport.width; canvas.height = viewport.height;
-        
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        const img = canvas.toDataURL('image/jpeg', 0.85);
-        
-        updateDashboard(img, pageNum);
-        broadcast({ type: 'pdf-img', img: img, page: pageNum });
-    }
-
-    function updateDashboard(img, pg) {
-        new THREE.TextureLoader().load(img, tex => {
-            dashboard.material.map = tex;
-            dashboard.material.opacity = 1;
-            dashboard.material.needsUpdate = true;
-            tex.minFilter = THREE.LinearFilter;
-            tex.magFilter = THREE.LinearFilter;
-            tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-            document.getElementById('page-num').innerText = `PAG ${pg} / ${pdfDoc ? pdfDoc.numPages : 1}`;
-        });
-    }
-
-    function changePage(delta) {
-        if(!pdfDoc) return;
-        const newPage = Math.max(1, Math.min(pdfDoc.numPages, pageNum + delta));
-        if(newPage !== pageNum) {
-            pageNum = newPage;
-            renderPDF();
-            addLog('DOC', `Página ${pageNum}`);
-        }
-    }
-
-    document.getElementById('pdf-upload').addEventListener('change', async (e) => {
-        const file = e.target.files[0];
+    // === PDF ===
+    async function loadPDF(event) {
+        const file = event.target.files[0];
         if(!file) return;
+        
         const reader = new FileReader();
         reader.onload = async function() {
             try {
                 pdfDoc = await pdfjsLib.getDocument(new Uint8Array(this.result)).promise;
                 pageNum = 1;
-                renderPDF();
-                addLog('DOC', `PDF: ${file.name}`);
-                showNotification(`PDF cargado: ${file.name}`);
-            } catch(e) { 
-                addLog('ERROR', `PDF: ${e.message}`); 
+                pdfPages = pdfDoc.numPages;
+                await renderPage();
+                addLog('DOC', `PDF cargado: ${file.name} (${pdfPages} páginas)`);
+                showNotification(`PDF: ${file.name}`);
+            } catch(e) {
+                addLog('ERROR', `PDF: ${e.message}`);
             }
         };
         reader.readAsArrayBuffer(file);
-    });
+    }
 
-    // --- YOUTUBE ---
-    function loadYT() {
-        const url = document.getElementById('yt-url').value.trim();
-        if(!url) return;
+    async function renderPage() {
+        if(!pdfDoc) return;
+        const page = await pdfDoc.getPage(pageNum);
+        const canvas = document.getElementById('pdf-canvas');
+        const ctx = canvas.getContext('2d');
+        const viewport = page.getViewport({ scale: 2.5 });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
         
-        const videoId = extractYouTubeId(url);
-        if(!videoId) {
-            addLog('ERROR', 'YouTube URL inválida');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const img = canvas.toDataURL('image/jpeg', 0.85);
+        
+        updateDashboard(img, pageNum, pdfPages);
+        broadcast({ type: 'pdf-img', img: img, page: pageNum, total: pdfPages });
+    }
+
+    function updateDashboard(img, page, total) {
+        new THREE.TextureLoader().load(img, tex => {
+            dashboard.material.map = tex;
+            dashboard.material.opacity = 1;
+            dashboard.material.needsUpdate = true;
+            document.getElementById('page-display').textContent = `${page}/${total || '---'}`;
+        });
+    }
+
+    function prevPage() {
+        if(!pdfDoc || pageNum <= 1) return;
+        pageNum--;
+        renderPage();
+    }
+
+    function nextPage() {
+        if(!pdfDoc || pageNum >= pdfPages) return;
+        pageNum++;
+        renderPage();
+    }
+
+    // === AUDIO ===
+    function toggleMic() {
+        if(!navigator.mediaDevices) {
+            showNotification("Audio requiere HTTPS");
             return;
         }
         
-        loadYouTubeVideo(videoId);
-        broadcast({ type: 'youtube', videoId: videoId });
-        addLog('VIDEO', `YouTube: ${videoId}`);
+        if(audioStream) {
+            isMuted = !isMuted;
+            audioStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
+            
+            const btn = document.getElementById('mic-status');
+            if(isMuted) {
+                btn.textContent = 'SILENCIADO';
+                document.querySelector('.control-btn').style.background = 'rgba(255, 80, 80, 0.2)';
+                document.querySelector('.control-btn').style.borderColor = 'rgba(255, 80, 80, 0.5)';
+            } else {
+                btn.textContent = 'ACTIVO';
+                document.querySelector('.control-btn').style.background = 'rgba(0, 212, 255, 0.2)';
+                document.querySelector('.control-btn').style.borderColor = 'rgba(0, 212, 255, 0.5)';
+            }
+        } else {
+            navigator.mediaDevices.getUserMedia({ audio: true, echoCancellation: true, noiseSuppression: true })
+                .then(stream => {
+                    audioStream = stream;
+                    isMuted = false;
+                    document.getElementById('mic-status').textContent = 'ACTIVO';
+                    document.querySelector('.control-btn').style.background = 'rgba(0, 212, 255, 0.2)';
+                    document.querySelector('.control-btn').style.borderColor = 'rgba(0, 212, 255, 0.5)';
+                    addLog('AUDIO', 'Micrófono activado');
+                    showNotification('Micrófono activo');
+                    setupVoiceDetection(stream);
+                })
+                .catch(e => {
+                    addLog('ERROR', `Audio: ${e.message}`);
+                });
+        }
     }
 
-    function extractYouTubeId(url) {
-        const match = url.match(/(?:youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?v=)([^#&?]*)/);
-        return match && match[1].length === 11 ? match[1] : null;
+    function startTalking() {
+        if(audioStream && !isMuted) {
+            isTalking = true;
+            document.getElementById('push-talk').classList.add('active');
+            broadcast({ type: 'speaking', id: peer.id, isSpeaking: true });
+        }
     }
 
+    function stopTalking() {
+        if(isTalking) {
+            isTalking = false;
+            document.getElementById('push-talk').classList.remove('active');
+            broadcast({ type: 'speaking', id: peer.id, isSpeaking: false });
+        }
+    }
+
+    function setupVoiceDetection(stream) {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(stream);
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        let wasSpeaking = false;
+        
+        function detect() {
+            if(!audioStream || isMuted) {
+                requestAnimationFrame(detect);
+                return;
+            }
+            
+            analyser.getByteFrequencyData(dataArray);
+            const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
+            const speaking = avg > 40;
+            
+            if(speaking !== wasSpeaking) {
+                wasSpeaking = speaking;
+                broadcast({ type: 'speaking', id: peer.id, isSpeaking: speaking });
+            }
+            
+            requestAnimationFrame(detect);
+        }
+        detect();
+    }
+
+    // === CHAT ===
+    function handleChat(event) {
+        if(event.key === 'Enter' && event.target.value.trim()) {
+            const text = event.target.value.trim();
+            broadcast({ type: 'chat', user: isHost ? 'HOST' : 'GUEST', text });
+            event.target.value = '';
+        }
+    }
+
+    function addChatMessage(user, text) {
+        const msg = document.createElement('div');
+        msg.className = 'chat-message';
+        const time = new Date().toLocaleTimeString();
+        msg.innerHTML = `<span class="time">${time}</span><span class="user">${user}:</span> ${text}`;
+        document.getElementById('chat-messages').appendChild(msg);
+        document.getElementById('chat-messages').scrollTop = 9999;
+    }
+
+    // === TIMER ===
+    function setTimer(min) {
+        timeLeft = min * 60;
+        broadcast({ type: 'timer', sec: timeLeft });
+        addLog('TIMER', `${min} minutos`);
+    }
+
+    function updateTimerDisplay() {
+        const m = Math.floor(timeLeft / 60);
+        const s = timeLeft % 60;
+        document.getElementById('timer-display').textContent = 
+            `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+
+    // === YOUTUBE ===
     function loadYouTubeVideo(videoId) {
         youtubeVideoId = videoId;
         isYouTubeActive = false;
@@ -638,7 +1032,7 @@
         if(dashboard.material.map) {
             dashboard.material.map.dispose();
             dashboard.material.map = null;
-            dashboard.material.opacity = 0.15;
+            dashboard.material.opacity = 0.1;
         }
         
         const div = document.createElement('div');
@@ -650,39 +1044,46 @@
         iframe.allowFullscreen = true;
         iframe.style.cssText = 'width: 100%; height: 100%; border: none;';
         
-        iframe.onerror = function() {
-            div.innerHTML = `
-                <div class="yt-blocked-message">
-                    <h3>⚠️ Video Bloqueado</h3>
-                    <p>Este video tiene restringida su incrustación. Ábrelo directamente en YouTube.</p>
-                    <button onclick="closeYouTube()">CERRAR</button>
-                </div>
-            `;
-        };
-        
         div.appendChild(iframe);
         
         const youtube3d = new THREE.CSS3DObject(div);
         youtube3d.name = 'youtube3d';
-        youtube3d.position.set(0, 2.6, -3.98);
+        youtube3d.position.set(0, 3, -9.48);
         youtube3d.scale.set(0.008, 0.008, 0.008);
         scene.add(youtube3d);
         
         isYouTubeActive = true;
         document.body.classList.add('youtube-active');
         
-        addLog('VIDEO', `Cargado: ${videoId}`);
-    }
-    
-    function closeYouTube() {
-        const oldObj = scene.getObjectByName('youtube3d');
-        if(oldObj) scene.remove(oldObj);
-        youtubeVideoId = null;
-        isYouTubeActive = false;
-        document.body.classList.remove('youtube-active');
+        document.getElementById('page-display').textContent = 'VIDEO';
     }
 
-    // --- INTERACCIONES ---
+    // === UTILIDADES ===
+    function playPause() {
+        isPlaying = !isPlaying;
+        addLog('AUDIO', isPlaying ? 'Reproducción iniciada' : 'Pausado');
+    }
+
+    function resetCamera() {
+        camera.position.set(0, 1.7, 8);
+        camera.rotation.set(0, 0, 0);
+        addLog('SYSTEM', 'Cámara reiniciada');
+    }
+
+    function addLog(type, msg) {
+        const t = new Date().toLocaleTimeString();
+        logs.push(`[${t}] ${type}: ${msg}`);
+    }
+
+    function showNotification(msg) {
+        const notif = document.createElement('div');
+        notif.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,212,255,0.95);color:#000;padding:15px 30px;border-radius:4px;font-weight:bold;z-index:200;';
+        notif.textContent = msg;
+        document.body.appendChild(notif);
+        setTimeout(() => notif.remove(), 2000);
+    }
+
+    // === INTERACCIONES ===
     function setupInteractions() {
         // Láser
         window.addEventListener('mousemove', (e) => {
@@ -709,15 +1110,6 @@
             }
         });
 
-        // Chat
-        document.getElementById('chat-input').addEventListener('keypress', (e) => {
-            if(e.key === 'Enter' && e.target.value) {
-                const txt = e.target.value;
-                broadcast({ type: 'chat', user: isHost ? 'HOST' : 'GUEST', text: txt });
-                e.target.value = '';
-            }
-        });
-
         // Redimensionar
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -726,186 +1118,31 @@
             cssRenderer.setSize(window.innerWidth, window.innerHeight);
             composer.setSize(window.innerWidth, window.innerHeight);
         });
-    }
 
-    // --- TIMER ---
-    function sendTimer(min) {
-        timeLeft = min * 60;
-        broadcast({ type: 'timer', sec: timeLeft });
-        addLog('TIMER', `${min} minutos`);
-    }
-
-    function updateTimerDisplay() {
-        const m = Math.floor(timeLeft / 60);
-        const s = timeLeft % 60;
-        const display = document.getElementById('timer-display');
-        display.innerText = `${m}:${s.toString().padStart(2,'0')}`;
-        display.style.color = timeLeft < 30 && timeLeft > 0 ? '#ff3333' : 'var(--neon)';
-        display.style.textShadow = timeLeft < 30 && timeLeft > 0 ? '0 0 15px #ff0000' : '0 0 10px var(--neon)';
-    }
-
-    // --- AUDIO ---
-    async function unlockAudio() {
-        try {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            if(audioContext.state === 'suspended') {
-                await audioContext.resume();
+        // Click en sala para mover
+        window.addEventListener('click', (e) => {
+            if(e.target.closest('#hud') || e.target.closest('#entry-screen')) return;
+            
+            const mouse = new THREE.Vector2(
+                (e.clientX / window.innerWidth) * 2 - 1,
+                -(e.clientY / window.innerHeight) * 2 + 1
+            );
+            
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera(mouse, camera);
+            const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+            const point = new THREE.Vector3();
+            
+            if(ray.ray.intersectPlane(plane, point)) {
+                if(point.x > -12 && point.x < 12 && point.z > -12 && point.z < 8) {
+                    camera.position.x = point.x;
+                    camera.position.z = point.z;
+                }
             }
-            addLog('AUDIO', 'Contexto de audio desbloqueado');
-        } catch(e) {
-            addLog('AUDIO', 'Audio no disponible');
-        }
+        });
     }
 
-    function toggleMic() {
-        if(!navigator.mediaDevices) {
-            showNotification("Audio requiere HTTPS");
-            return;
-        }
-        
-        if(audioStream) {
-            isMuted = !isMuted;
-            const tracks = audioStream.getAudioTracks();
-            tracks.forEach(track => track.enabled = !isMuted);
-            
-            const btn = document.getElementById('mic-btn');
-            if(isMuted) {
-                btn.textContent = '🔇 OFF';
-                btn.style.background = '#ff4444';
-                addLog('AUDIO', 'Silenciado');
-            } else {
-                btn.textContent = '🎤 ON';
-                btn.style.background = 'var(--neon-green)';
-                addLog('AUDIO', 'Micrófono activo');
-            }
-            
-            broadcast({ type: 'speaking', id: peer.id, isSpeaking: !isMuted });
-        } else {
-            navigator.mediaDevices.getUserMedia({ audio: true, echoCancellation: true, noiseSuppression: true })
-                .then(stream => {
-                    audioStream = stream;
-                    document.getElementById('mic-btn').textContent = '🎤 ON';
-                    document.getElementById('mic-btn').style.background = 'var(--neon-green)';
-                    addLog('AUDIO', 'Micrófono activado');
-                    showNotification('Micrófono activo');
-                    setupVoiceDetection(stream);
-                })
-                .catch(e => {
-                    addLog('ERROR', `Audio: ${e.message}`);
-                });
-        }
-    }
-    
-    function setupVoiceDetection(stream) {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioCtx.createMediaStreamSource(stream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        let isSpeaking = false;
-        
-        function detect() {
-            if(!audioStream || isMuted) {
-                requestAnimationFrame(detect);
-                return;
-            }
-            
-            analyser.getByteFrequencyData(dataArray);
-            const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
-            const speaking = avg > 30 && !isMuted;
-            
-            if(speaking !== isSpeaking) {
-                isSpeaking = speaking;
-                broadcast({ type: 'speaking', id: peer.id, isSpeaking: speaking });
-            }
-            
-            requestAnimationFrame(detect);
-        }
-        detect();
-    }
-
-    function toggleMuteAll() {
-        if(!isHost) {
-            showNotification('Solo el HOST puede silenciar');
-            return;
-        }
-        
-        isMuted = !isMuted;
-        
-        if(audioStream) {
-            audioStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
-        }
-        
-        const btn = document.getElementById('mic-btn');
-        if(isMuted) {
-            btn.textContent = '🔇 OFF';
-            btn.style.background = '#ff4444';
-        } else {
-            btn.textContent = '🎤 ON';
-            btn.style.background = 'var(--neon-green)';
-        }
-        
-        broadcast({ type: 'mute-all', muted: isMuted });
-        addLog('AUDIO', isMuted ? 'Todos silenciados' : 'Audio activado');
-    }
-    
-    function handleMuteAll(muted) {
-        isMuted = muted;
-        
-        const btn = document.getElementById('mic-btn');
-        if(isMuted) {
-            btn.textContent = '🔇 OFF';
-            btn.style.background = '#ff4444';
-        } else {
-            btn.textContent = '🎤 ON';
-            btn.style.background = 'var(--neon-green)';
-        }
-        
-        if(audioStream) {
-            audioStream.getAudioTracks().forEach(track => track.enabled = !isMuted);
-        }
-        
-        addLog('AUDIO', muted ? 'Silenciado por HOST' : 'Audio restaurado');
-    }
-
-    function addLog(type, msg) {
-        const t = new Date().toLocaleTimeString();
-        logs.push(`[${t}] ${type}: ${msg}`);
-        if(type === 'CHAT') {
-            const div = document.createElement('div');
-            div.innerHTML = `<span style="color:#666">${t}</span> ${msg}`;
-            document.getElementById('messages').appendChild(div);
-            document.getElementById('messages').scrollTop = 9999;
-        }
-    }
-
-    function exportLog() {
-        const blob = new Blob([logs.join('\n')], {type: 'text/plain'});
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `Log_${roomName}_${new Date().toISOString().substr(0,10)}.txt`;
-        a.click();
-        addLog('LOG', 'Exportado');
-    }
-
-    function showNotification(msg) {
-        const notif = document.createElement('div');
-        notif.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,243,255,0.95);color:#000;padding:15px 30px;border-radius:8px;font-weight:bold;z-index:200;box-shadow:0 0 30px rgba(0,243,255,0.5);';
-        notif.textContent = msg;
-        document.body.appendChild(notif);
-        setTimeout(() => notif.remove(), 2500);
-    }
-
-    function startApp() {
-        document.getElementById('welcome-modal').style.display = 'none';
-        document.getElementById('hud').style.display = 'flex';
-        unlockAudio();
-        init3D();
-    }
-
-    // Loop principal
+    // === LOOP PRINCIPAL ===
     setInterval(() => {
         // Actualizar avatar local
         if(isHost || myConn) {
@@ -917,7 +1154,7 @@
                 z: camera.position.z,
                 rotY: camera.rotation.y,
                 name: isHost ? 'HOST' : 'Participante',
-                isSpeaking: audioStream && !isMuted
+                isSpeaking: audioStream && !isMuted && isTalking
             });
         }
         
@@ -925,14 +1162,14 @@
         if(timeLeft > 0) {
             timeLeft--;
             updateTimerDisplay();
-            if(isHost && timeLeft > 0 && timeLeft % 10 === 0) {
-                broadcast({ type: 'timer', sec: timeLeft });
-            }
-            if(timeLeft === 0) {
+            if(isHost && timeLeft === 0) {
                 addLog('TIMER', '¡Tiempo agotado!');
                 showNotification('¡Tiempo agotado!');
             }
         }
+        
+        // UTC
+        document.getElementById('utc-time').textContent = new Date().toISOString().substr(11, 8);
         
         // Partículas
         if(scene.userData.particles) {
@@ -940,27 +1177,16 @@
             const positions = particles.geometry.attributes.position.array;
             particles.userData.velocities.forEach((v, i) => {
                 positions[i * 3 + 1] += v.y;
-                if(positions[i * 3 + 1] > 5) {
-                    positions[i * 3 + 1] = 0.5;
-                    positions[i * 3] = (Math.random() - 0.5) * 30;
-                    positions[i * 3 + 2] = (Math.random() - 0.5) * 30;
-                }
+                if(positions[i * 3 + 1] > 6) positions[i * 3 + 1] = 1;
             });
             particles.geometry.attributes.position.needsUpdate = true;
         }
-        
-        // Animar anillos
-        Object.values(remoteAvatars).forEach(avatar => {
-            if(avatar.userData.ring) {
-                avatar.userData.ring.rotation.z += 0.015;
-            }
-        });
     }, 1000);
 
     function animate() {
         requestAnimationFrame(animate);
         
-        dashboard.position.y = 2.6 + Math.sin(Date.now() * 0.001) * 0.03;
+        dashboard.position.y = 3 + Math.sin(Date.now() * 0.001) * 0.02;
         
         composer.render(scene, camera);
         cssRenderer.render(scene, camera);
