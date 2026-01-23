@@ -452,8 +452,8 @@
             try {
                 const page = await state.pdfDoc.getPage(pageNum);
 
-                // High-resolution PDF rendering (scale 2.5 for HD quality)
-                const scale = 2.5;
+                // Ultra HD PDF rendering (scale 3 for maximum quality)
+                const scale = 3;
                 const viewport = page.getViewport({ scale: scale });
 
                 // Create canvas with DevicePixelRatio support for retina/HD screens
@@ -470,8 +470,9 @@
                 const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
                 await page.render({ canvasContext: context, transform: transform, viewport: viewport }).promise;
 
-                // High-quality texture with better filters
+                // Ultra-quality texture with mipmaps and anisotropy
                 const texture = new THREE.CanvasTexture(canvas);
+                texture.generateMipmaps = true;
                 texture.minFilter = THREE.LinearFilter;
                 texture.magFilter = THREE.LinearFilter;
                 texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
