@@ -674,7 +674,7 @@
                 <input type="text" id="youtubeUrl" placeholder="YouTube URL or Video ID" value="">
             </div>
             <div class="video-preview" id="videoPreview">
-                <iframe id="youtubeEmbed" src="" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                <iframe id="youtubeEmbed" src="" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
             </div>
             <button class="action-btn primary" id="loadVideo">Load Video on Dashboard</button>
             <button class="action-btn secondary" id="shareVideo">Share Video Link</button>
@@ -724,6 +724,12 @@
         </div>
     </div>
 
+    <!-- Base URL for proper asset resolution -->
+    <base href="/">
+
+    <!-- Socket.IO client library (from CDN for static deployment) -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
     <!-- Three.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
@@ -733,12 +739,12 @@
 
         // Global State
         const state = {
-            roomId: 'HM-VR-2024-XK7M',
-            participants: [
-                { id: 1, name: 'You', avatar: 0, chair: null, isSpeaking: false },
-                { id: 2, name: 'Sarah Chen', avatar: 1, chair: 2, isSpeaking: true },
-                { id: 3, name: 'Marcus Webb', avatar: 2, chair: 5, isSpeaking: false }
-            ],
+            roomId: new URLSearchParams(window.location.search).get('room') || 'HM-VR-2024-XK7M',
+            username: new URLSearchParams(window.location.search).get('username') || 'Guest',
+            socket: null,
+            peerConnection: null,
+            localStream: null,
+            participants: [],
             currentMode: 'youtube',
             currentSlide: 1,
             totalSlides: 1,
@@ -754,6 +760,363 @@
             presentationMode: null // 'youtube' or 'pdf'
         };
 
+        // TURN/STUN server configuration for WebRTC
+        const iceServers = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                // Add your TURN server here for production:
+                // {
+                //   urls: 'turn:your-turn-server.com:3478',
+                //   username: 'user',
+                //   credential: 'password'
+                // }
+            ]
+        };
+
+        // Initialize Socket.IO connection
+        function initializeSocket() {
+            // Try to connect to the signaling server
+            state.socket = io({
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: 3,
+                reconnectionDelay: 1000,
+                timeout: 5000
+            });
+
+            state.socket.on('connect', () => {
+                console.log('Connected to signaling server:', state.socket.id);
+                showNotification('Connected to server');
+
+                // Join the room
+                state.socket.emit('join-room', {
+                    roomId: state.roomId,
+                    username: state.username,
+                    avatarColor: getAvatarColor(state.selectedAvatar)
+                });
+            });
+
+            state.socket.on('connect_error', (error) => {
+                console.log('Server connection failed, running in demo mode');
+                showNotification('Demo mode - server not connected');
+                initializeDemoMode();
+            });
+
+            state.socket.on('disconnect', () => {
+                console.log('Disconnected from signaling server');
+                showNotification('Disconnected from server');
+            });
+
+            state.socket.on('room-state', (roomState) => {
+                console.log('Received room state:', roomState);
+                state.participants = roomState.users.map(u => ({
+                    id: u.id,
+                    socketId: u.socketId,
+                    name: u.username,
+                    avatar: parseInt(u.avatarColor?.replace('#', ''), 16) % 5 || 0,
+                    chair: u.chairIndex,
+                    isSpeaking: u.isSpeaking
+                }));
+                updateParticipantCount();
+                createAvatars();
+            });
+
+            state.socket.on('room-users', (users) => {
+                console.log('Room users updated:', users);
+                state.participants = users.map(u => ({
+                    id: u.id,
+                    socketId: u.socketId,
+                    name: u.username,
+                    avatar: parseInt(u.avatarColor?.replace('#', ''), 16) % 5 || 0,
+                    chair: u.chairIndex,
+                    isSpeaking: u.isSpeaking
+                }));
+                updateParticipantCount();
+                updateAvatars();
+            });
+
+            state.socket.on('user-joined', (user) => {
+                console.log('User joined:', user.username);
+                showNotification(`${user.username} joined the room`);
+                createPeerConnection(user.id);
+            });
+
+            state.socket.on('user-left', (user) => {
+                console.log('User left:', user.username);
+                showNotification(`${user.username} left the room`);
+                removeAvatar(user.id);
+            });
+
+            state.socket.on('new-message', (message) => {
+                console.log('New message:', message);
+                showNotification(`${message.user}: ${message.text}`);
+            });
+
+            state.socket.on('content-update', (dashboard) => {
+                console.log('Dashboard content updated:', dashboard);
+                if (dashboard.type === 'youtube') {
+                    state.youtubeVideoId = dashboard.data;
+                    state.currentMode = 'youtube';
+                } else if (dashboard.type === 'pdf') {
+                    state.pdfUrl = dashboard.data;
+                    state.currentMode = 'pdf';
+                }
+            });
+        }
+
+        // Initialize demo mode with mock participants (when server is not available)
+        function initializeDemoMode() {
+            console.log('Running in demo mode with mock participants');
+            state.participants = [
+                { id: 1, name: state.username, avatar: state.selectedAvatar, chair: null, isSpeaking: false },
+                { id: 2, name: 'Sarah Chen', avatar: 1, chair: 2, isSpeaking: true },
+                { id: 3, name: 'Marcus Webb', avatar: 2, chair: 5, isSpeaking: false }
+            ];
+            updateParticipantCount();
+            createAvatars();
+        }
+
+        // Initialize WebRTC Peer Connection
+        function createPeerConnection(peerId) {
+            if (state.peerConnection) {
+                closePeerConnection();
+            }
+
+            state.peerConnection = new RTCPeerConnection(iceServers);
+
+            state.peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    state.socket.emit('ice-candidate', {
+                        targetId: peerId,
+                        candidate: event.candidate
+                    });
+                }
+            };
+
+            state.peerConnection.ontrack = (event) => {
+                console.log('Received remote track:', event.streams[0]);
+                // Handle remote audio stream
+            };
+
+            state.peerConnection.onconnectionstatechange = () => {
+                console.log('Connection state:', state.peerConnection.connectionState);
+            };
+
+            // Add local stream tracks
+            if (state.localStream) {
+                state.localStream.getTracks().forEach(track => {
+                    state.peerConnection.addTrack(track, state.localStream);
+                });
+            }
+
+            // Create and send offer
+            createOffer(peerId);
+        }
+
+        async function createOffer(peerId) {
+            try {
+                const offer = await state.peerConnection.createOffer();
+                await state.peerConnection.setLocalDescription(offer);
+                state.socket.emit('offer', {
+                    targetId: peerId,
+                    offer: offer
+                });
+            } catch (error) {
+                console.error('Error creating offer:', error);
+            }
+        }
+
+        function closePeerConnection() {
+            if (state.peerConnection) {
+                state.peerConnection.close();
+                state.peerConnection = null;
+            }
+        }
+
+        // Initialize local media stream
+        async function initializeMedia() {
+            try {
+                state.localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: false
+                });
+                console.log('Local media stream acquired');
+            } catch (error) {
+                console.error('Error accessing media devices:', error);
+                showNotification('Microphone access denied');
+            }
+        }
+
+        // Socket.IO event handlers for WebRTC signaling
+        function setupSignaling() {
+            state.socket.on('offer', async (data) => {
+                const { offer, fromId } = data;
+                state.peerConnection = new RTCPeerConnection(iceServers);
+
+                state.peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        state.socket.emit('ice-candidate', {
+                            targetId: fromId,
+                            candidate: event.candidate
+                        });
+                    }
+                };
+
+                state.peerConnection.ontrack = (event) => {
+                    console.log('Received remote track:', event.streams[0]);
+                };
+
+                if (state.localStream) {
+                    state.localStream.getTracks().forEach(track => {
+                        state.peerConnection.addTrack(track, state.localStream);
+                    });
+                }
+
+                await state.peerConnection.setRemoteDescription(offer);
+                const answer = await state.peerConnection.createAnswer();
+                await state.peerConnection.setLocalDescription(answer);
+
+                state.socket.emit('answer', {
+                    targetId: fromId,
+                    answer: answer
+                });
+            });
+
+            state.socket.on('answer', async (data) => {
+                const { answer } = data;
+                if (state.peerConnection) {
+                    await state.peerConnection.setRemoteDescription(answer);
+                }
+            });
+
+            state.socket.on('ice-candidate', async (data) => {
+                const { candidate } = data;
+                if (state.peerConnection && candidate) {
+                    try {
+                        await state.peerConnection.addIceCandidate(candidate);
+                    } catch (error) {
+                        console.error('Error adding ICE candidate:', error);
+                    }
+                }
+            });
+        }
+
+        // Helper function to get avatar color based on selection
+        function getAvatarColor(avatarIndex) {
+            const colors = ['#00F3FF', '#FF6B6B', '#00FF88', '#FF8E53', '#7000FF'];
+            return colors[avatarIndex] || colors[0];
+        }
+
+        // Update participant count display
+        function updateParticipantCount() {
+            document.getElementById('participantCount').textContent =
+                `${state.participants.length} participant${state.participants.length !== 1 ? 's' : ''}`;
+        }
+
+        // Update avatars when participants change
+        function updateAvatars() {
+            // Clear existing avatars
+            avatars.forEach(avatar => scene.remove(avatar));
+            avatars = [];
+
+            // Create new avatars
+            createAvatars();
+        }
+
+        // Remove avatar when user leaves
+        function removeAvatar(userId) {
+            const index = avatars.findIndex(a => a.userData.id === userId);
+            if (index !== -1) {
+                scene.remove(avatars[index]);
+                avatars.splice(index, 1);
+            }
+
+            // Update participants list
+            state.participants = state.participants.filter(p => p.id !== userId);
+            updateParticipantCount();
+        }
+
+        // Socket event handlers for room actions
+        function setupRoomEventHandlers() {
+            // Sit in chair
+            document.addEventListener('click', (event) => {
+                if (state.isSitting && event.target.closest('.control-btn')) {
+                    // Allow control button clicks when seated
+                    return;
+                }
+            });
+
+            // Emit sit-chair event
+            window.sitInChair = (chairIndex) => {
+                if (state.socket) {
+                    state.socket.emit('sit-chair', {
+                        roomId: state.roomId,
+                        chairIndex: chairIndex
+                    });
+                }
+            };
+
+            // Emit speaking events
+            window.startPushToTalk = () => {
+                if (state.socket) {
+                    state.socket.emit('start-speaking', {
+                        roomId: state.roomId
+                    });
+                }
+            };
+
+            window.stopPushToTalk = () => {
+                if (state.socket) {
+                    state.socket.emit('stop-speaking', {
+                        roomId: state.roomId
+                    });
+                }
+            };
+
+            // Emit chat message
+            window.sendChatMessage = (message) => {
+                if (state.socket) {
+                    state.socket.emit('chat-message', {
+                        roomId: state.roomId,
+                        message: message
+                    });
+                }
+            };
+
+            // Share PDF
+            window.sharePdf = (pdfUrl, filename) => {
+                if (state.socket) {
+                    state.socket.emit('share-pdf', {
+                        roomId: state.roomId,
+                        pdfData: pdfUrl,
+                        filename: filename
+                    });
+                }
+            };
+
+            // Share Video
+            window.shareVideo = (videoUrl, title) => {
+                if (state.socket) {
+                    state.socket.emit('share-video', {
+                        roomId: state.roomId,
+                        videoUrl: videoUrl,
+                        title: title
+                    });
+                }
+            };
+
+            // Clear content
+            window.clearContent = () => {
+                if (state.socket) {
+                    state.socket.emit('clear-content', {
+                        roomId: state.roomId
+                    });
+                }
+            };
+        }
+
         // Three.js Components
         let scene, camera, renderer, clock;
         let chairs = [];
@@ -763,9 +1126,15 @@
         let hoverTimeout;
 
         // Initialize
-        function init() {
+        async function init() {
             // Loading simulation
             simulateLoading();
+
+            // Initialize Socket.IO and WebRTC
+            await initializeMedia();
+            initializeSocket();
+            setupSignaling();
+            setupRoomEventHandlers();
 
             // Setup Three.js scene
             setupScene();
@@ -1111,14 +1480,20 @@
         }
 
         function createAvatars() {
+            // Clear existing avatars first
+            avatars.forEach(avatar => scene.remove(avatar));
+            avatars = [];
+
             state.participants.forEach((participant, index) => {
                 const avatar = createAvatar(participant);
-                if (participant.chair !== null) {
+                if (participant.chair !== null && participant.chair !== undefined) {
                     // Place avatar at their chair
                     const chair = chairs[participant.chair];
-                    avatar.position.copy(chair.position);
-                    avatar.position.y = 0.5;
-                    avatar.rotation.y = chairs[participant.chair].rotation.y;
+                    if (chair) {
+                        avatar.position.copy(chair.position);
+                        avatar.position.y = 0.5;
+                        avatar.rotation.y = chairs[participant.chair].rotation.y;
+                    }
                 } else {
                     // Random position for the player
                     avatar.position.set(
@@ -1393,16 +1768,24 @@
                         state.isSitting = true;
                         state.currentChair = chairIndex;
                         chairs[chairIndex].userData.occupied = true;
-                        
+
+                        // Emit sit-chair event via Socket.IO
+                        if (state.socket) {
+                            state.socket.emit('sit-chair', {
+                                roomId: state.roomId,
+                                chairIndex: chairIndex
+                            });
+                        }
+
                         // Move camera to chair position
                         const chairPos = chairs[chairIndex].position;
                         camera.position.set(chairPos.x, 1.3, chairPos.z + 0.5);
-                        
+
                         // Look at dashboard
                         camera.lookAt(0, 2, -8);
                         window.cameraControls.yaw = Math.atan2(-camera.position.x, -camera.position.z - 8 - camera.position.z);
                         window.cameraControls.pitch = -0.2;
-                        
+
                         showNotification(`Sitting at Chair ${chairIndex + 1}`);
                     } else {
                         showNotification('Chair is occupied');
@@ -1583,9 +1966,12 @@
                 document.getElementById('dashboardTitle').textContent = 'YouTube Presentation';
                 content.innerHTML = `
                     <div class="dashboard-youtube-container">
-                        <iframe src="https://www.youtube.com/embed/${state.youtubeVideoId}?autoplay=1" 
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                                allowfullscreen></iframe>
+                        <iframe src="https://www.youtube.com/embed/${state.youtubeVideoId}?autoplay=1"
+                                title="YouTube video player"
+                                frameborder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowfullscreen
+                                referrerpolicy="strict-origin-when-cross-origin"></iframe>
                     </div>
                 `;
             } else if (state.currentMode === 'pdf' && state.pdfUrl) {

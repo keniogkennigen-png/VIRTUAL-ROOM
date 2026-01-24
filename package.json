@@ -1,16 +1,24 @@
 {
   "name": "holomeet-vr",
   "version": "1.0.0",
-  "description": "Holographic VR Conference Room",
-  "main": "index.html",
+  "description": "Holographic VR Conference Room with WebRTC and Socket.IO",
+  "main": "server.js",
   "scripts": {
+    "start": "node server.js",
     "serve": "npx serve .",
-    "build": "mkdir -p dist && cp index.html dist/"
+    "build": "mkdir -p dist && cp index.html dist/",
+    "dev": "node server.js"
   },
-  "keywords": ["vr", "conference", "3d", "holographic"],
-  "author": "MiniMax Agent",
+  "keywords": ["vr", "conference", "3d", "holographic", "webrtc", "socket.io"],
+  "author": "Matrix Agent",
   "license": "MIT",
   "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "peer": "^0.6.1",
     "playwright": "^1.57.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
   }
 }

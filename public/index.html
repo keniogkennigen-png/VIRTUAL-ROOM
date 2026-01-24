@@ -3,726 +3,2577 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HoloMeet VR - Collaborative Conference Room</title>
+    <title>HoloMeet VR - Holographic Conference Room</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { overflow: hidden; background: #000; font-family: 'Segoe UI', system-ui, sans-serif; }
-        #canvas-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; }
-        .ui-overlay { position: fixed; z-index: 100; pointer-events: none; }
-        .ui-overlay > * { pointer-events: auto; }
-        .top-bar { top: 0; left: 0; right: 0; height: 60px; background: linear-gradient(180deg, rgba(5,5,16,0.95) 0%, rgba(5,5,16,0) 100%); display: flex; justify-content: space-between; align-items: center; padding: 0 30px; }
-        .room-info { display: flex; align-items: center; gap: 15px; }
-        .room-id { color: #00F3FF; font-size: 14px; background: rgba(0,243,255,0.1); border: 1px solid rgba(0,243,255,0.3); padding: 8px 16px; border-radius: 20px; cursor: pointer; transition: all 0.3s ease; }
-        .room-id:hover { background: rgba(0,243,255,0.2); box-shadow: 0 0 20px rgba(0,243,255,0.4); }
-        .participant-count { color: #fff; font-size: 14px; display: flex; align-items: center; gap: 8px; }
-        .participant-count::before { content: ''; width: 8px; height: 8px; background: #00FF88; border-radius: 50%; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .control-panel { bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 15px; padding: 15px 25px; background: rgba(5,5,16,0.9); border: 1px solid rgba(0,243,255,0.2); border-radius: 50px; backdrop-filter: blur(20px); }
-        .control-btn { width: 50px; height: 50px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s ease; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
-        .control-btn:hover { transform: scale(1.1); }
-        .control-btn.active { background: rgba(0,243,255,0.2); border-color: #00F3FF; box-shadow: 0 0 20px rgba(0,243,255,0.3); }
-        .control-btn.muted { background: rgba(255,50,50,0.2); border-color: #FF3232; }
-        .control-btn svg { width: 24px; height: 24px; fill: #fff; }
-        .control-btn.active svg { fill: #00F3FF; }
-        .control-btn.muted svg { fill: #FF3232; }
-        .ptt-indicator { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); color: #00F3FF; font-size: 14px; padding: 8px 20px; background: rgba(0,243,255,0.1); border: 1px solid rgba(0,243,255,0.3); border-radius: 20px; opacity: 0; transition: opacity 0.2s ease; }
-        .ptt-indicator.active { opacity: 1; }
-        .dashboard-panel { top: 50%; right: 20px; transform: translateY(-50%); width: 280px; padding: 20px; background: rgba(5,5,16,0.9); border: 1px solid rgba(112,0,255,0.3); border-radius: 20px; backdrop-filter: blur(20px); }
-        .panel-title { color: #fff; font-size: 16px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
-        .panel-title::before { content: ''; width: 4px; height: 20px; background: #7000FF; border-radius: 2px; }
-        .dashboard-tabs { display: flex; gap: 10px; margin-bottom: 20px; }
-        .tab-btn { flex: 1; padding: 10px; border: none; border-radius: 10px; cursor: pointer; background: rgba(255,255,255,0.05); color: #888; font-size: 12px; transition: all 0.3s ease; }
-        .tab-btn.active { background: rgba(112,0,255,0.3); color: #fff; border: 1px solid rgba(112,0,255,0.5); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .input-group { margin-bottom: 15px; }
-        .input-group label { color: #888; font-size: 12px; display: block; margin-bottom: 8px; }
-        .input-group input, .input-group textarea { width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; background: rgba(255,255,255,0.05); color: #fff; font-size: 14px; resize: none; }
-        .input-group input:focus, .input-group textarea:focus { outline: none; border-color: #7000FF; }
-        .action-btn { width: 100%; padding: 12px; border: none; border-radius: 10px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.3s ease; margin-bottom: 10px; }
-        .action-btn.primary { background: linear-gradient(135deg, #7000FF, #00F3FF); color: #fff; }
-        .action-btn.secondary { background: rgba(255,255,255,0.1); color: #fff; }
-        .action-btn:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(112,0,255,0.4); }
-        .video-preview { width: 100%; height: 120px; background: rgba(0,0,0,0.5); border-radius: 10px; margin-bottom: 10px; overflow: hidden; position: relative; }
-        .video-preview iframe { width: 100%; height: 100%; border: none; }
-        .pdf-preview { width: 100%; height: 120px; background: rgba(255,255,255,0.05); border-radius: 10px; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; color: #888; font-size: 12px; border: 1px dashed rgba(255,255,255,0.2); }
-        .slide-nav { display: flex; gap: 10px; align-items: center; }
-        .slide-nav span { flex: 1; text-align: center; color: #fff; font-size: 14px; }
-        .nav-btn { width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer; background: rgba(255,255,255,0.1); color: #fff; font-size: 18px; transition: all 0.3s ease; }
-        .nav-btn:hover { background: rgba(112,0,255,0.3); }
-        .avatar-section { margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.1); }
-        .avatar-options { display: flex; gap: 10px; margin-top: 10px; }
-        .avatar-option { width: 50px; height: 50px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; background: rgba(255,255,255,0.1); transition: all 0.3s ease; }
-        .avatar-option.selected { border-color: #00F3FF; box-shadow: 0 0 15px rgba(0,243,255,0.4); }
-        .avatar-option:hover { transform: scale(1.1); }
-        /* Chat sidebar */
-        .chat-sidebar { position: fixed; left: 20px; top: 80px; bottom: 150px; width: 280px; background: rgba(5,5,16,0.9); border: 1px solid rgba(0,243,255,0.2); border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; }
-        .chat-messages { flex: 1; overflow-y: auto; padding: 15px; }
-        .chat-message { margin-bottom: 10px; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 10px; font-size: 13px; }
-        .chat-message .sender { color: #00F3FF; font-weight: bold; }
-        .chat-message .time { color: #555; font-size: 11px; margin-left: 8px; }
-        .chat-input { width: 100%; padding: 12px; border: none; border-top: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #fff; font-size: 13px; outline: none; }
-        .chat-input:focus { background: rgba(0,243,255,0.1); }
-        /* Login modal */
-        #login-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 3000; display: flex; align-items: center; justify-content: center; }
-        #login-modal.hidden { display: none; }
-        #login-box { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); border: 2px solid #00F3FF; border-radius: 20px; padding: 40px; width: 380px; text-align: center; }
-        #login-box h2 { color: #00F3FF; margin-bottom: 30px; font-size: 24px; text-transform: uppercase; letter-spacing: 3px; }
-        #login-box input { width: 100%; padding: 15px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px; color: #fff; font-size: 14px; margin-bottom: 15px; outline: none; }
-        #login-box input:focus { border-color: #00F3FF; }
-        #login-box button { width: 100%; padding: 15px; background: linear-gradient(135deg, #00F3FF 0%, #00a8cc 100%); border: none; border-radius: 10px; color: #000; font-weight: bold; font-size: 14px; cursor: pointer; text-transform: uppercase; transition: all 0.3s; }
-        #login-box button:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0,243,255,0.4); }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Holographic UI Overlay */
+        .ui-overlay {
+            position: fixed;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .ui-overlay > * {
+            pointer-events: auto;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(180deg, rgba(5,5,16,0.95) 0%, rgba(5,5,16,0) 100%);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+        }
+
+        .room-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .room-id {
+            color: #00F3FF;
+            font-size: 14px;
+            background: rgba(0,243,255,0.1);
+            border: 1px solid rgba(0,243,255,0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .room-id:hover {
+            background: rgba(0,243,255,0.2);
+            box-shadow: 0 0 20px rgba(0,243,255,0.4);
+        }
+
+        .copy-icon {
+            margin-left: 8px;
+        }
+
+        .participant-count {
+            color: #fff;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .participant-count::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #00FF88;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Control Panel */
+        .control-panel {
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            padding: 15px 25px;
+            background: rgba(5,5,16,0.9);
+            border: 1px solid rgba(0,243,255,0.2);
+            border-radius: 50px;
+            backdrop-filter: blur(20px);
+        }
+
+        .control-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .control-btn.active {
+            background: rgba(0,243,255,0.2);
+            border-color: #00F3FF;
+            box-shadow: 0 0 20px rgba(0,243,255,0.3);
+        }
+
+        .control-btn.muted {
+            background: rgba(255,50,50,0.2);
+            border-color: #FF3232;
+        }
+
+        .control-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: #fff;
+        }
+
+        .control-btn.active svg {
+            fill: #00F3FF;
+        }
+
+        .control-btn.muted svg {
+            fill: #FF3232;
+        }
+
+        .control-btn.speaking svg {
+            fill: #00FF88;
+            filter: drop-shadow(0 0 10px #00FF88);
+        }
+
+        /* Push-to-Talk Indicator */
+        .ptt-indicator {
+            position: fixed;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #00F3FF;
+            font-size: 14px;
+            padding: 8px 20px;
+            background: rgba(0,243,255,0.1);
+            border: 1px solid rgba(0,243,255,0.3);
+            border-radius: 20px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .ptt-indicator.active {
+            opacity: 1;
+        }
+
+        /* Right Panel - Dashboard Controls */
+        .dashboard-panel {
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            width: 280px;
+            padding: 20px;
+            background: rgba(5,5,16,0.9);
+            border: 1px solid rgba(112,0,255,0.3);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+        }
+
+        .panel-title {
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            background: #7000FF;
+            border-radius: 2px;
+        }
+
+        .dashboard-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.05);
+            color: #888;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn.active {
+            background: rgba(112,0,255,0.3);
+            color: #fff;
+            border: 1px solid rgba(112,0,255,0.5);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        .input-group label {
+            color: #888;
+            font-size: 12px;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .input-group input,
+        .input-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-size: 14px;
+            resize: none;
+        }
+
+        .input-group input:focus,
+        .input-group textarea:focus {
+            outline: none;
+            border-color: #7000FF;
+        }
+
+        .action-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-bottom: 10px;
+        }
+
+        .action-btn.primary {
+            background: linear-gradient(135deg, #7000FF, #00F3FF);
+            color: #fff;
+        }
+
+        .action-btn.secondary {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(112,0,255,0.4);
+        }
+
+        /* Video Preview */
+        .video-preview {
+            width: 100%;
+            height: 120px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .video-preview iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        /* PDF Preview */
+        .pdf-preview {
+            width: 100%;
+            height: 120px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #888;
+            font-size: 12px;
+            border: 1px dashed rgba(255,255,255,0.2);
+        }
+
+        /* Slide Navigation */
+        .slide-nav {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .slide-nav span {
+            flex: 1;
+            text-align: center;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .nav-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 18px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-btn:hover {
+            background: rgba(112,0,255,0.3);
+        }
+
+        /* Avatar Selection */
+        .avatar-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .avatar-options {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .avatar-option {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+        }
+
+        .avatar-option.selected {
+            border-color: #00F3FF;
+            box-shadow: 0 0 15px rgba(0,243,255,0.4);
+        }
+
+        .avatar-option:hover {
+            transform: scale(1.1);
+        }
+
+        /* Instructions */
+        .instructions {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
+            text-align: center;
+            padding: 10px 20px;
+            background: rgba(5,5,16,0.7);
+            border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* Chair Status Tooltip */
+        .chair-tooltip {
+            position: fixed;
+            padding: 8px 12px;
+            background: rgba(5,5,16,0.95);
+            border: 1px solid #00F3FF;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            z-index: 200;
+        }
+
+        .chair-tooltip.visible {
+            opacity: 1;
+        }
+
+        /* Loading Screen */
+        .loading-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #050510;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-screen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-logo {
+            font-size: 48px;
+            font-weight: 300;
+            color: #00F3FF;
+            margin-bottom: 30px;
+            text-shadow: 0 0 30px rgba(0,243,255,0.5);
+        }
+
+        .loading-bar {
+            width: 300px;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .loading-progress {
+            height: 100%;
+            background: linear-gradient(90deg, #7000FF, #00F3FF);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .loading-text {
+            color: rgba(255,255,255,0.5);
+            font-size: 14px;
+            margin-top: 20px;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            background: rgba(0,255,136,0.1);
+            border: 1px solid #00FF88;
+            border-radius: 10px;
+            color: #00FF88;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 300;
+        }
+
+        .notification.show {
+            opacity: 1;
+        }
+
+        /* Fullscreen Dashboard */
+        .dashboard-fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.95);
+            z-index: 500;
+            display: none;
+            flex-direction: column;
+        }
+
+        .dashboard-fullscreen.active {
+            display: flex;
+        }
+
+        .dashboard-header {
+            height: 60px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .dashboard-title {
+            color: #fff;
+            font-size: 18px;
+        }
+
+        .close-dashboard {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .close-dashboard:hover {
+            background: rgba(255,50,50,0.3);
+        }
+
+        .dashboard-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dashboard-youtube-container {
+            width: 80%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(112,0,255,0.3);
+        }
+
+        .dashboard-youtube-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .dashboard-pdf-container {
+            width: 80%;
+            height: 80%;
+            background: #fff;
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .pdf-toolbar {
+            height: 50px;
+            background: #1a1a2e;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .pdf-page-info {
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .pdf-canvas-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #333;
+        }
+
+        .pdf-canvas-wrapper canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
     </style>
 </head>
 <body>
-
-<!-- Login Modal -->
-<div id="login-modal">
-    <div id="login-box">
-        <h2>🏢 HoloMeet VR</h2>
-        <input type="text" id="username-input" placeholder="Enter your name..." maxlength="20">
-        <input type="text" id="room-input" placeholder="Room name" value="Main-Room">
-        <button onclick="joinRoom()">Enter Room</button>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-logo">HoloMeet VR</div>
+        <div class="loading-bar">
+            <div class="loading-progress" id="loadingProgress"></div>
+        </div>
+        <div class="loading-text">Initializing Holographic Environment...</div>
     </div>
-</div>
 
-<div id="canvas-container"></div>
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container"></div>
 
-<div class="ui-overlay">
-    <div class="top-bar">
+    <!-- UI Overlay -->
+    <div class="ui-overlay top-bar">
         <div class="room-info">
-            <div class="room-id" id="roomId">Room: ---</div>
-            <div class="participant-count" id="participantCount">1 participants</div>
+            <div class="room-id" id="roomId">
+                <span id="roomLinkText">Room: HM-VR-2024-XK7M</span>
+                <span class="copy-icon">📋</span>
+            </div>
+        </div>
+        <div class="participant-count">
+            <span id="participantCount">3 participants</span>
         </div>
     </div>
 
-    <div class="control-panel">
-        <button class="control-btn" id="micBtn" title="Mute/Unmute"><svg><use xlink:href="#mic-icon"></use></svg></button>
-        <button class="control-btn" id="cameraBtn" title="Camera"><svg><use xlink:href="#camera-icon"></use></svg></button>
-        <button class="control-btn" id="screenBtn" title="Share Screen"><svg><use xlink:href="#screen-icon"></use></svg></button>
-        <button class="control-btn" id="participantsBtn" title="Participants"><svg><use xlink:href="#participants-icon"></use></svg></button>
+    <div class="instructions">
+        Click on chairs to sit • WASD to move • Mouse to look around • Space for Push-to-Talk
     </div>
-    <div class="ptt-indicator" id="pttIndicator">Push to Talk (Hold Spacebar)</div>
 
-    <div class="dashboard-panel">
-        <div class="panel-title">Presentation Dashboard</div>
+    <div class="ui-overlay control-panel">
+        <button class="control-btn" id="micBtn" title="Microphone (Click to toggle)">
+            <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/></svg>
+        </button>
+        <button class="control-btn" id="pttModeBtn" title="Push-to-Talk Mode">
+            <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+        </button>
+        <button class="control-btn" id="cameraBtn" title="Camera">
+            <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+        </button>
+        <button class="control-btn" id="avatarBtn" title="Avatar">
+            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        </button>
+        <button class="control-btn" id="presentBtn" title="Present">
+            <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-5-7l-3 3.72L9 13l-3 4h12l-4-5z"/></svg>
+        </button>
+        <button class="control-btn" id="settingsBtn" title="Settings">
+            <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        </button>
+        <button class="control-btn" id="leaveBtn" title="Leave Room" style="background: rgba(255,50,50,0.2); border-color: #FF3232;">
+            <svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.68-1.36-2.66-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
+        </button>
+    </div>
+
+    <div class="ptt-indicator" id="pttIndicator">🎤 Push-to-Talk Active - Hold SPACE</div>
+
+    <div class="ui-overlay dashboard-panel">
+        <div class="panel-title">Holographic Dashboard</div>
+        
         <div class="dashboard-tabs">
             <button class="tab-btn active" data-tab="youtube">YouTube</button>
             <button class="tab-btn" data-tab="pdf">PDF Slides</button>
         </div>
+
         <div class="tab-content active" id="youtubeTab">
             <div class="input-group">
-                <label>YouTube URL or Video ID</label>
-                <input type="text" id="youtubeUrl" placeholder="https://youtu.be/... or video ID">
+                <label>Video URL or ID</label>
+                <input type="text" id="youtubeUrl" placeholder="YouTube URL or Video ID" value="">
             </div>
-            <button class="action-btn primary" id="loadVideo">Load Video</button>
-            <div class="video-preview" id="videoPreview"></div>
+            <div class="video-preview" id="videoPreview">
+                <iframe id="youtubeEmbed" src="" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            </div>
+            <button class="action-btn primary" id="loadVideo">Load Video on Dashboard</button>
+            <button class="action-btn secondary" id="shareVideo">Share Video Link</button>
         </div>
+
         <div class="tab-content" id="pdfTab">
             <div class="input-group">
-                <label>PDF File (Shared with Room)</label>
-                <input type="file" id="pdfFile" accept=".pdf">
+                <label>PDF URL</label>
+                <input type="text" id="pdfUrl" placeholder="https://example.com/presentation.pdf" value="">
             </div>
-            <button class="action-btn primary" id="loadPdf">Load PDF</button>
-            <div class="pdf-preview" id="pdfPreview">No PDF loaded</div>
+            <div class="pdf-preview" id="pdfPreview">
+                <span>PDF Preview</span>
+            </div>
             <div class="slide-nav">
                 <button class="nav-btn" id="prevSlide">◀</button>
                 <span id="slideCounter">Slide 1 / 1</span>
                 <button class="nav-btn" id="nextSlide">▶</button>
             </div>
+            <button class="action-btn primary" id="loadPdf">Load PDF on Dashboard</button>
+            <button class="action-btn secondary" id="sharePdf">Share PDF Link</button>
         </div>
+
         <div class="avatar-section">
             <div class="panel-title">Your Avatar</div>
             <div class="avatar-options">
-                <div class="avatar-option selected" data-color="#00F3FF" style="background: #00F3FF;"></div>
-                <div class="avatar-option" data-color="#FF00FF" style="background: #FF00FF;"></div>
-                <div class="avatar-option" data-color="#00FF88" style="background: #00FF88;"></div>
-                <div class="avatar-option" data-color="#FF8800" style="background: #FF8800;"></div>
-                <div class="avatar-option" data-color="#8888FF" style="background: #8888FF;"></div>
+                <div class="avatar-option selected" data-avatar="0" style="background: linear-gradient(135deg, #00F3FF, #7000FF);"></div>
+                <div class="avatar-option" data-avatar="1" style="background: linear-gradient(135deg, #FF6B6B, #FF8E53);"></div>
+                <div class="avatar-option" data-avatar="2" style="background: linear-gradient(135deg, #00FF88, #00F3FF);"></div>
+                <div class="avatar-option" data-avatar="3" style="background: linear-gradient(135deg, #FF8E53, #FF6B6B);"></div>
+                <div class="avatar-option" data-avatar="4" style="background: linear-gradient(135deg, #7000FF, #FF6B6B);"></div>
             </div>
+            <button class="action-btn secondary" id="randomizeAvatar" style="margin-top: 15px;">🎲 Randomize Avatar</button>
         </div>
     </div>
 
-    <!-- Chat Sidebar -->
-    <div class="chat-sidebar">
-        <div class="chat-messages" id="chatMessages"></div>
-        <input type="text" class="chat-input" id="chatInput" placeholder="Type message...">
+    <div class="chair-tooltip" id="chairTooltip">Click to sit</div>
+
+    <div class="notification" id="notification"></div>
+
+    <div class="dashboard-fullscreen" id="dashboardFullscreen">
+        <div class="dashboard-header">
+            <div class="dashboard-title" id="dashboardTitle">Holographic Dashboard</div>
+            <button class="close-dashboard" id="closeDashboard">✕</button>
+        </div>
+        <div class="dashboard-content" id="dashboardContent">
+            <!-- Content loaded dynamically -->
+        </div>
     </div>
-</div>
 
-<!-- SVG Icons -->
-<svg style="display: none;">
-    <symbol id="mic-icon" viewBox="0 0 24 24">
-        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1 2h2v2h-2v-2zm0 4h2v2h-2v-2zm-5-8h2v2H6v-2zm0 4h2v2H6v-2zm12-4h2v2h-2v-2zm0 4h2v2h-2v-2zm-7 4h2v2h-2v-2z"/>
-    </symbol>
-    <symbol id="camera-icon" viewBox="0 0 24 24">
-        <path d="M12 15.2c1.76 0 3.2-1.44 3.2-3.2V4.8c0-1.76-1.44-3.2-3.2-3.2S8.8 3.04 8.8 4.8v7.2c0 1.76 1.44 3.2 3.2 3.2zm6-9.2h2l2-3h-4l2 3zm4 10c0 2.21-1.79 4-4 4H6c-2.21 0-4-1.79-4-4V6c0-2.21 1.79-4 4-4h12c2.21 0 4 1.79 4 4v10z"/>
-    </symbol>
-    <symbol id="screen-icon" viewBox="0 0 24 24">
-        <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
-    </symbol>
-    <symbol id="participants-icon" viewBox="0 0 24 24">
-        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
-    </symbol>
-</svg>
+    <!-- Base URL for proper asset resolution -->
+    <base href="/">
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/controls/OrbitControls.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/controls/PointerLockControls.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/loaders/GLTFLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/webxr/VRButton.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="/socket.io/socket.io.js"></script>
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script>
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    <!-- Socket.IO client library (from CDN for static deployment) -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-    // Configuration
-    const urlParams = new URLSearchParams(window.location.search);
-    let roomId = urlParams.get('room') || 'Main-Room';
-    let username = 'Guest';
-    let serverUrl = window.location.origin;
+    <!-- Three.js from CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // ============================================
+        // HoloMeet VR - Holographic Conference Room
+        // ============================================
 
-    // State
-    let socket, peer;
-    let scene, camera, renderer, controls, dashboard, avatars = [], chairs = [];
-    let state = {
-        userId: null,
-        participants: [],
-        currentMode: 'youtube',
-        youtubeVideoId: null,
-        pdfDoc: null,
-        currentSlide: 1,
-        totalSlides: 1,
-        selectedAvatarColor: '#00F3FF',
-        micStream: null,
-        audioContext: null,
-        isTalking: false,
-        isMuted: true,
-        peers: {}
-    };
+        // Global State
+        const state = {
+            roomId: new URLSearchParams(window.location.search).get('room') || 'HM-VR-2024-XK7M',
+            username: new URLSearchParams(window.location.search).get('username') || 'Guest',
+            socket: null,
+            peerConnection: null,
+            localStream: null,
+            participants: [],
+            currentMode: 'youtube',
+            currentSlide: 1,
+            totalSlides: 1,
+            youtubeVideoId: null,
+            pdfUrl: null,
+            isMicOn: true,
+            isPttMode: false,
+            isPttActive: false,
+            selectedAvatar: 0,
+            isSitting: false,
+            currentChair: null,
+            cameraMode: 'free', // 'free' or 'seated'
+            presentationMode: null // 'youtube' or 'pdf'
+        };
 
-    // Initialize PeerJS and Socket.io
-    function initializeConnections() {
-        // Socket.io connection
-        socket = io(serverUrl);
+        // TURN/STUN server configuration for WebRTC
+        const iceServers = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                // Add your TURN server here for production:
+                // {
+                //   urls: 'turn:your-turn-server.com:3478',
+                //   username: 'user',
+                //   credential: 'password'
+                // }
+            ]
+        };
 
-        socket.on('connect', () => {
-            console.log('Connected to server');
-        });
-
-        socket.on('room-joined', (room) => {
-            document.getElementById('roomId').textContent = `Room: ${room}`;
-            window.history.replaceState(null, '', `?room=${room}&username=${username}`);
-        });
-
-        socket.on('room-state', (roomState) => {
-            state.participants = roomState.users || [];
-            updateParticipantCount();
-            if (roomState.dashboard && roomState.dashboard.type !== 'none') {
-                displayContent(roomState.dashboard);
-            }
-        });
-
-        socket.on('room-users', (users) => {
-            state.participants = users;
-            updateParticipantCount();
-            updateAvatars();
-        });
-
-        socket.on('user-joined', (user) => {
-            addChatMessage('System', `${user.username} joined the room`);
-        });
-
-        socket.on('user-left', (user) => {
-            addChatMessage('System', `${user.username} left the room`);
-        });
-
-        socket.on('new-message', (msg) => {
-            addChatMessage(msg.user, msg.text);
-        });
-
-        socket.on('content-update', (content) => {
-            displayContent(content);
-        });
-
-        // PeerJS for WebRTC audio
-        peer = new Peer();
-
-        peer.on('open', (id) => {
-            state.userId = id;
-            joinRoom();
-        });
-
-        peer.on('call', (call) => {
-            call.answer(state.micStream);
-            handleCall(call);
-        });
-
-        peer.on('error', (err) => {
-            console.log('PeerJS error:', err);
-        });
-    }
-
-    function joinRoom() {
-        socket.emit('join-room', {
-            roomId: roomId,
-            username: username,
-            avatarColor: state.selectedAvatarColor
-        });
-    }
-
-    function handleCall(call) {
-        state.peers[call.peer] = call;
-        call.on('stream', (remoteStream) => {
-            const audio = new Audio();
-            audio.srcObject = remoteStream;
-            audio.play().catch(err => console.log('Audio play error:', err));
-        });
-    }
-
-    function connectToPeers() {
-        state.participants.forEach(p => {
-            if (p.id !== state.userId && p.socketId && !state.peers[p.id]) {
-                const call = peer.call(p.id, state.micStream);
-                if (call) handleCall(call);
-            }
-        });
-    }
-
-    function init() {
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x020212);
-        scene.fog = new THREE.FogExp2(0x020212, 0.05);
-
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.6, 5);
-
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.outputColorSpace = THREE.SRGBColorSpace;
-        renderer.xr.enabled = true;
-        document.getElementById('canvas-container').appendChild(renderer.domElement);
-
-        document.body.appendChild(VRButton.createButton(renderer));
-
-        controls = new THREE.PointerLockControls(camera, renderer.domElement);
-        scene.add(controls.getObject());
-
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
-        scene.add(ambientLight);
-
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x4444ff, 1.5);
-        scene.add(hemiLight);
-
-        const pointLight = new THREE.PointLight(0xffffff, 8, 50);
-        pointLight.position.set(0, 5, 0);
-        pointLight.castShadow = true;
-        pointLight.shadow.mapSize.width = 2048;
-        pointLight.shadow.mapSize.height = 2048;
-        scene.add(pointLight);
-
-        const dirLight = new THREE.DirectionalLight(0xffffff, 2);
-        dirLight.position.set(5, 10, 5);
-        dirLight.castShadow = true;
-        dirLight.shadow.camera.near = 0.5;
-        dirLight.shadow.camera.far = 50;
-        scene.add(dirLight);
-
-        createConferenceRoom();
-        addParticles();
-
-        // Tab switching
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-                document.getElementById(btn.dataset.tab + 'Tab').classList.add('active');
-                state.currentMode = btn.dataset.tab;
+        // Initialize Socket.IO connection
+        function initializeSocket() {
+            // Try to connect to the signaling server
+            state.socket = io({
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: 3,
+                reconnectionDelay: 1000,
+                timeout: 5000
             });
-        });
 
-        // YouTube load
-        document.getElementById('loadVideo').addEventListener('click', () => {
-            const input = document.getElementById('youtubeUrl').value;
-            const videoId = extractYouTubeId(input);
-            if (videoId) {
-                state.youtubeVideoId = videoId;
-                socket.emit('share-video', { roomId, videoUrl: videoId, title: 'YouTube Video' });
-                updateDashboard('youtube');
-            }
-        });
+            state.socket.on('connect', () => {
+                console.log('Connected to signaling server:', state.socket.id);
+                showNotification('Connected to server');
 
-        // PDF load
-        document.getElementById('loadPdf').addEventListener('click', async () => {
-            const file = document.getElementById('pdfFile').files[0];
-            if (file) {
-                const arrayBuffer = await file.arrayBuffer();
-                state.pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                state.totalSlides = state.pdfDoc.numPages;
-                state.currentSlide = 1;
-                updateSlideCounter();
-                socket.emit('share-pdf', { roomId, pdfData: arrayBuffer, filename: file.name });
-                updateDashboard('pdf');
-            }
-        });
-
-        // Slide navigation
-        document.getElementById('prevSlide').addEventListener('click', () => {
-            if (state.currentSlide > 1) {
-                state.currentSlide--;
-                updateSlideCounter();
-                updateDashboard('pdf');
-            }
-        });
-        document.getElementById('nextSlide').addEventListener('click', () => {
-            if (state.currentSlide < state.totalSlides) {
-                state.currentSlide++;
-                updateSlideCounter();
-                updateDashboard('pdf');
-            }
-        });
-
-        // Avatar color selection
-        document.querySelectorAll('.avatar-option').forEach(option => {
-            option.addEventListener('click', () => {
-                document.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
-                option.classList.add('selected');
-                state.selectedAvatarColor = option.dataset.color;
-            });
-        });
-
-        // Mic setup
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-            state.micStream = stream;
-            state.isMuted = true;
-            updateMicButton();
-        }).catch(err => console.log('Mic access denied:', err));
-
-        document.getElementById('micBtn').addEventListener('click', () => {
-            if (state.micStream) {
-                state.isMuted = !state.isMuted;
-                state.micStream.getAudioTracks().forEach(track => {
-                    track.enabled = !state.isMuted;
+                // Join the room
+                state.socket.emit('join-room', {
+                    roomId: state.roomId,
+                    username: state.username,
+                    avatarColor: getAvatarColor(state.selectedAvatar)
                 });
-                updateMicButton();
-            }
-        });
+            });
 
-        // PTT with spacebar
-        document.addEventListener('keydown', (e) => {
-            if (e.key === ' ' && !state.isMuted && !state.isTalking) {
-                e.preventDefault();
-                state.isTalking = true;
-                document.getElementById('pttIndicator').classList.add('active');
-                if (state.micStream) {
-                    state.micStream.getAudioTracks().forEach(track => track.enabled = true);
+            state.socket.on('connect_error', (error) => {
+                console.log('Server connection failed, running in demo mode');
+                showNotification('Demo mode - server not connected');
+                initializeDemoMode();
+            });
+
+            state.socket.on('disconnect', () => {
+                console.log('Disconnected from signaling server');
+                showNotification('Disconnected from server');
+            });
+
+            state.socket.on('room-state', (roomState) => {
+                console.log('Received room state:', roomState);
+                state.participants = roomState.users.map(u => ({
+                    id: u.id,
+                    socketId: u.socketId,
+                    name: u.username,
+                    avatar: parseInt(u.avatarColor?.replace('#', ''), 16) % 5 || 0,
+                    chair: u.chairIndex,
+                    isSpeaking: u.isSpeaking
+                }));
+                updateParticipantCount();
+                createAvatars();
+            });
+
+            state.socket.on('room-users', (users) => {
+                console.log('Room users updated:', users);
+                state.participants = users.map(u => ({
+                    id: u.id,
+                    socketId: u.socketId,
+                    name: u.username,
+                    avatar: parseInt(u.avatarColor?.replace('#', ''), 16) % 5 || 0,
+                    chair: u.chairIndex,
+                    isSpeaking: u.isSpeaking
+                }));
+                updateParticipantCount();
+                updateAvatars();
+            });
+
+            state.socket.on('user-joined', (user) => {
+                console.log('User joined:', user.username);
+                showNotification(`${user.username} joined the room`);
+                createPeerConnection(user.id);
+            });
+
+            state.socket.on('user-left', (user) => {
+                console.log('User left:', user.username);
+                showNotification(`${user.username} left the room`);
+                removeAvatar(user.id);
+            });
+
+            state.socket.on('new-message', (message) => {
+                console.log('New message:', message);
+                showNotification(`${message.user}: ${message.text}`);
+            });
+
+            state.socket.on('content-update', (dashboard) => {
+                console.log('Dashboard content updated:', dashboard);
+                if (dashboard.type === 'youtube') {
+                    state.youtubeVideoId = dashboard.data;
+                    state.currentMode = 'youtube';
+                } else if (dashboard.type === 'pdf') {
+                    state.pdfUrl = dashboard.data;
+                    state.currentMode = 'pdf';
                 }
-                socket.emit('start-speaking', { roomId });
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            if (e.key === ' ') {
-                state.isTalking = false;
-                document.getElementById('pttIndicator').classList.remove('active');
-                if (state.micStream) {
-                    state.micStream.getAudioTracks().forEach(track => track.enabled = false);
-                }
-                socket.emit('stop-speaking', { roomId });
-            }
-        });
-
-        // Chat input
-        document.getElementById('chatInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && e.target.value.trim()) {
-                socket.emit('chat-message', { roomId, message: e.target.value });
-                e.target.value = '';
-            }
-        });
-
-        // Sit on chair click
-        renderer.domElement.addEventListener('click', onClickSit);
-
-        // Update peers when participants change
-        socket.on('room-users', connectToPeers);
-
-        window.addEventListener('resize', onWindowResize);
-        renderer.setAnimationLoop(animate);
-    }
-
-    function updateMicButton() {
-        const btn = document.getElementById('micBtn');
-        if (state.isMuted) {
-            btn.classList.add('muted');
-            btn.classList.remove('active');
-        } else {
-            btn.classList.remove('muted');
-            btn.classList.add('active');
+            });
         }
-    }
 
-    function createConferenceRoom() {
-        const loader = new THREE.TextureLoader();
+        // Initialize demo mode with mock participants (when server is not available)
+        function initializeDemoMode() {
+            console.log('Running in demo mode with mock participants');
+            state.participants = [
+                { id: 1, name: state.username, avatar: state.selectedAvatar, chair: null, isSpeaking: false },
+                { id: 2, name: 'Sarah Chen', avatar: 1, chair: 2, isSpeaking: true },
+                { id: 3, name: 'Marcus Webb', avatar: 2, chair: 5, isSpeaking: false }
+            ];
+            updateParticipantCount();
+            createAvatars();
+        }
 
-        // Floor
-        const floorTexture = loader.load('https://threejs.org/examples/textures/floor_wood.jpg');
-        floorTexture.wrapS = floorTexture.wrapT = THREE.RepeatWrapping;
-        floorTexture.repeat.set(4, 4);
-        const floorGeometry = new THREE.CircleGeometry(8, 64);
-        const floorMaterial = new THREE.MeshStandardMaterial({ map: floorTexture, roughness: 0.6, metalness: 0.1 });
-        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-        floor.rotation.x = -Math.PI / 2;
-        floor.receiveShadow = true;
-        scene.add(floor);
+        // Initialize WebRTC Peer Connection
+        function createPeerConnection(peerId) {
+            if (state.peerConnection) {
+                closePeerConnection();
+            }
 
-        // Table
-        const tableTexture = loader.load('https://threejs.org/examples/textures/metal.jpg');
-        const tableGeometry = new THREE.CylinderGeometry(3, 3, 0.2, 64);
-        const tableMaterial = new THREE.MeshStandardMaterial({ map: tableTexture, roughness: 0.3, metalness: 0.8 });
-        const table = new THREE.Mesh(tableGeometry, tableMaterial);
-        table.position.y = 1;
-        table.castShadow = true;
-        table.receiveShadow = true;
-        scene.add(table);
+            state.peerConnection = new RTCPeerConnection(iceServers);
 
-        // Dashboard screen
-        const screenGeometry = new THREE.PlaneGeometry(4, 3);
-        const screenMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-        dashboard = new THREE.Mesh(screenGeometry, screenMaterial);
-        dashboard.position.set(0, 2.5, -3.5);
-        dashboard.rotation.y = Math.PI;
-        scene.add(dashboard);
+            state.peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    state.socket.emit('ice-candidate', {
+                        targetId: peerId,
+                        candidate: event.candidate
+                    });
+                }
+            };
 
-        // 10 Chairs
-        for (let i = 0; i < 10; i++) {
-            const angle = (i / 10) * Math.PI * 2;
-            const x = Math.cos(angle) * 4;
-            const z = Math.sin(angle) * 4;
+            state.peerConnection.ontrack = (event) => {
+                console.log('Received remote track:', event.streams[0]);
+                // Handle remote audio stream
+            };
+
+            state.peerConnection.onconnectionstatechange = () => {
+                console.log('Connection state:', state.peerConnection.connectionState);
+            };
+
+            // Add local stream tracks
+            if (state.localStream) {
+                state.localStream.getTracks().forEach(track => {
+                    state.peerConnection.addTrack(track, state.localStream);
+                });
+            }
+
+            // Create and send offer
+            createOffer(peerId);
+        }
+
+        async function createOffer(peerId) {
+            try {
+                const offer = await state.peerConnection.createOffer();
+                await state.peerConnection.setLocalDescription(offer);
+                state.socket.emit('offer', {
+                    targetId: peerId,
+                    offer: offer
+                });
+            } catch (error) {
+                console.error('Error creating offer:', error);
+            }
+        }
+
+        function closePeerConnection() {
+            if (state.peerConnection) {
+                state.peerConnection.close();
+                state.peerConnection = null;
+            }
+        }
+
+        // Initialize local media stream
+        async function initializeMedia() {
+            try {
+                state.localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: false
+                });
+                console.log('Local media stream acquired');
+            } catch (error) {
+                console.error('Error accessing media devices:', error);
+                showNotification('Microphone access denied');
+            }
+        }
+
+        // Socket.IO event handlers for WebRTC signaling
+        function setupSignaling() {
+            state.socket.on('offer', async (data) => {
+                const { offer, fromId } = data;
+                state.peerConnection = new RTCPeerConnection(iceServers);
+
+                state.peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        state.socket.emit('ice-candidate', {
+                            targetId: fromId,
+                            candidate: event.candidate
+                        });
+                    }
+                };
+
+                state.peerConnection.ontrack = (event) => {
+                    console.log('Received remote track:', event.streams[0]);
+                };
+
+                if (state.localStream) {
+                    state.localStream.getTracks().forEach(track => {
+                        state.peerConnection.addTrack(track, state.localStream);
+                    });
+                }
+
+                await state.peerConnection.setRemoteDescription(offer);
+                const answer = await state.peerConnection.createAnswer();
+                await state.peerConnection.setLocalDescription(answer);
+
+                state.socket.emit('answer', {
+                    targetId: fromId,
+                    answer: answer
+                });
+            });
+
+            state.socket.on('answer', async (data) => {
+                const { answer } = data;
+                if (state.peerConnection) {
+                    await state.peerConnection.setRemoteDescription(answer);
+                }
+            });
+
+            state.socket.on('ice-candidate', async (data) => {
+                const { candidate } = data;
+                if (state.peerConnection && candidate) {
+                    try {
+                        await state.peerConnection.addIceCandidate(candidate);
+                    } catch (error) {
+                        console.error('Error adding ICE candidate:', error);
+                    }
+                }
+            });
+        }
+
+        // Helper function to get avatar color based on selection
+        function getAvatarColor(avatarIndex) {
+            const colors = ['#00F3FF', '#FF6B6B', '#00FF88', '#FF8E53', '#7000FF'];
+            return colors[avatarIndex] || colors[0];
+        }
+
+        // Update participant count display
+        function updateParticipantCount() {
+            document.getElementById('participantCount').textContent =
+                `${state.participants.length} participant${state.participants.length !== 1 ? 's' : ''}`;
+        }
+
+        // Update avatars when participants change
+        function updateAvatars() {
+            // Clear existing avatars
+            avatars.forEach(avatar => scene.remove(avatar));
+            avatars = [];
+
+            // Create new avatars
+            createAvatars();
+        }
+
+        // Remove avatar when user leaves
+        function removeAvatar(userId) {
+            const index = avatars.findIndex(a => a.userData.id === userId);
+            if (index !== -1) {
+                scene.remove(avatars[index]);
+                avatars.splice(index, 1);
+            }
+
+            // Update participants list
+            state.participants = state.participants.filter(p => p.id !== userId);
+            updateParticipantCount();
+        }
+
+        // Socket event handlers for room actions
+        function setupRoomEventHandlers() {
+            // Sit in chair
+            document.addEventListener('click', (event) => {
+                if (state.isSitting && event.target.closest('.control-btn')) {
+                    // Allow control button clicks when seated
+                    return;
+                }
+            });
+
+            // Emit sit-chair event
+            window.sitInChair = (chairIndex) => {
+                if (state.socket) {
+                    state.socket.emit('sit-chair', {
+                        roomId: state.roomId,
+                        chairIndex: chairIndex
+                    });
+                }
+            };
+
+            // Emit speaking events
+            window.startPushToTalk = () => {
+                if (state.socket) {
+                    state.socket.emit('start-speaking', {
+                        roomId: state.roomId
+                    });
+                }
+            };
+
+            window.stopPushToTalk = () => {
+                if (state.socket) {
+                    state.socket.emit('stop-speaking', {
+                        roomId: state.roomId
+                    });
+                }
+            };
+
+            // Emit chat message
+            window.sendChatMessage = (message) => {
+                if (state.socket) {
+                    state.socket.emit('chat-message', {
+                        roomId: state.roomId,
+                        message: message
+                    });
+                }
+            };
+
+            // Share PDF
+            window.sharePdf = (pdfUrl, filename) => {
+                if (state.socket) {
+                    state.socket.emit('share-pdf', {
+                        roomId: state.roomId,
+                        pdfData: pdfUrl,
+                        filename: filename
+                    });
+                }
+            };
+
+            // Share Video
+            window.shareVideo = (videoUrl, title) => {
+                if (state.socket) {
+                    state.socket.emit('share-video', {
+                        roomId: state.roomId,
+                        videoUrl: videoUrl,
+                        title: title
+                    });
+                }
+            };
+
+            // Clear content
+            window.clearContent = () => {
+                if (state.socket) {
+                    state.socket.emit('clear-content', {
+                        roomId: state.roomId
+                    });
+                }
+            };
+        }
+
+        // Three.js Components
+        let scene, camera, renderer, clock;
+        let chairs = [];
+        let avatars = [];
+        let dashboard;
+        let raycaster, mouse;
+        let hoverTimeout;
+
+        // Initialize
+        async function init() {
+            // Loading simulation
+            simulateLoading();
+
+            // Initialize Socket.IO and WebRTC
+            await initializeMedia();
+            initializeSocket();
+            setupSignaling();
+            setupRoomEventHandlers();
+
+            // Setup Three.js scene
+            setupScene();
+            
+            // Create environment
+            createRoom();
+            createChairs();
+            createDashboard();
+            createAvatars();
+            createLighting();
+            createParticles();
+
+            // Setup controls
+            setupControls();
+            
+            // Setup UI
+            setupUI();
+            
+            // Start animation loop
+            animate();
+        }
+
+        function simulateLoading() {
+            const progressBar = document.getElementById('loadingProgress');
+            const loadingText = document.querySelector('.loading-text');
+            const steps = [
+                'Initializing Holographic Environment...',
+                'Loading 3D Assets...',
+                'Creating Conference Room...',
+                'Setting up Audio Systems...',
+                'Ready to Join!'
+            ];
+            
+            let currentStep = 0;
+            const interval = setInterval(() => {
+                const progress = ((currentStep + 1) / steps.length) * 100;
+                progressBar.style.width = progress + '%';
+                loadingText.textContent = steps[currentStep];
+                
+                if (currentStep >= steps.length - 1) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        document.getElementById('loadingScreen').classList.add('hidden');
+                    }, 500);
+                }
+                currentStep++;
+            }, 400);
+        }
+
+        function setupScene() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050510);
+            scene.fog = new THREE.FogExp2(0x050510, 0.015);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.6, 8);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Clock
+            clock = new THREE.Clock();
+
+            // Raycaster
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Window resize
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createRoom() {
+            // Floor - Holographic Grid
+            const floorGeometry = new THREE.PlaneGeometry(30, 30, 50, 50);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a1a2e,
+                metalness: 0.9,
+                roughness: 0.1,
+                wireframe: false
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Holographic Grid Overlay
+            const gridHelper = new THREE.GridHelper(30, 30, 0x00F3FF, 0x112233);
+            gridHelper.position.y = 0.01;
+            scene.add(gridHelper);
+
+            // Walls
+            const wallMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a1a2e,
+                metalness: 0.8,
+                roughness: 0.2,
+                side: THREE.DoubleSide
+            });
+
+            // Back Wall
+            const backWall = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 10),
+                wallMaterial
+            );
+            backWall.position.set(0, 5, -15);
+            backWall.receiveShadow = true;
+            scene.add(backWall);
+
+            // Side Walls
+            const leftWall = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 10),
+                wallMaterial
+            );
+            leftWall.rotation.y = Math.PI / 2;
+            leftWall.position.set(-15, 5, 0);
+            scene.add(leftWall);
+
+            const rightWall = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 10),
+                wallMaterial
+            );
+            rightWall.rotation.y = -Math.PI / 2;
+            rightWall.position.set(15, 5, 0);
+            scene.add(rightWall);
+
+            // Ceiling with glow
+            const ceiling = new THREE.Mesh(
+                new THREE.PlaneGeometry(30, 30),
+                new THREE.MeshStandardMaterial({
+                    color: 0x0a0a1a,
+                    metalness: 0.9,
+                    roughness: 0.1,
+                    emissive: 0x050510,
+                    emissiveIntensity: 0.5
+                })
+            );
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = 10;
+            scene.add(ceiling);
+
+            // Holographic accent strips on walls
+            const stripGeometry = new THREE.BoxGeometry(0.1, 0.05, 30);
+            const stripMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00F3FF,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            for (let i = 0; i < 3; i++) {
+                const strip = new THREE.Mesh(stripGeometry, stripMaterial);
+                strip.position.set(-14.9, 2 + i * 2.5, 0);
+                scene.add(strip);
+
+                const strip2 = strip.clone();
+                strip2.position.set(14.9, 2 + i * 2.5, 0);
+                scene.add(strip2);
+            }
+        }
+
+        function createChairs() {
+            const chairPositions = [];
+            const radius = 6;
+            const startAngle = Math.PI * 0.3;
+            const endAngle = Math.PI * 0.7;
+
+            for (let i = 0; i < 10; i++) {
+                const angle = startAngle + (endAngle - startAngle) * (i / 9);
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius - 2;
+                chairPositions.push({ x, z, angle });
+            }
+
+            chairPositions.forEach((pos, index) => {
+                const chair = createSciFiChair(pos.x, pos.z, pos.angle);
+                chair.userData = { index, occupied: false };
+                chairs.push(chair);
+                scene.add(chair);
+            });
+        }
+
+        function createSciFiChair(x, z, angle) {
             const chairGroup = new THREE.Group();
 
-            const seatGeometry = new THREE.BoxGeometry(0.8, 0.2, 0.8);
-            const seatTexture = loader.load('https://threejs.org/examples/textures/fabric.jpg');
-            const seatMaterial = new THREE.MeshStandardMaterial({ map: seatTexture, roughness: 0.7, metalness: 0 });
+            // Base
+            const baseGeometry = new THREE.CylinderGeometry(0.4, 0.5, 0.1, 32);
+            const baseMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2a2a4e,
+                metalness: 0.9,
+                roughness: 0.1
+            });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = 0.05;
+            base.castShadow = true;
+            chairGroup.add(base);
+
+            // Stem
+            const stemGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.4, 16);
+            const stemMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00F3FF,
+                metalness: 0.9,
+                roughness: 0.1,
+                emissive: 0x00F3FF,
+                emissiveIntensity: 0.3
+            });
+            const stem = new THREE.Mesh(stemGeometry, stemMaterial);
+            stem.position.y = 0.25;
+            chairGroup.add(stem);
+
+            // Seat
+            const seatGeometry = new THREE.BoxGeometry(0.5, 0.08, 0.5);
+            const seatMaterial = new THREE.MeshStandardMaterial({
+                color: 0x3a3a5e,
+                metalness: 0.8,
+                roughness: 0.2
+            });
             const seat = new THREE.Mesh(seatGeometry, seatMaterial);
-            seat.position.y = 1;
+            seat.position.y = 0.5;
+            seat.castShadow = true;
             chairGroup.add(seat);
 
-            const backGeometry = new THREE.BoxGeometry(0.8, 1, 0.2);
-            const back = new THREE.Mesh(backGeometry, seatMaterial);
-            back.position.set(0, 1.5, -0.3);
+            // Backrest
+            const backGeometry = new THREE.BoxGeometry(0.5, 0.4, 0.05);
+            const backMaterial = new THREE.MeshStandardMaterial({
+                color: 0x3a3a5e,
+                metalness: 0.8,
+                roughness: 0.2
+            });
+            const back = new THREE.Mesh(backGeometry, backMaterial);
+            back.position.set(0, 0.75, -0.22);
+            back.rotation.x = -0.1;
+            back.castShadow = true;
             chairGroup.add(back);
 
-            chairGroup.position.set(x, 0, z);
-            chairGroup.rotation.y = angle + Math.PI;
-            chairGroup.castShadow = true;
-            chairGroup.receiveShadow = true;
-            scene.add(chairGroup);
-            chairs.push(chairGroup);
-
-            const avatar = createAvatar(0xffffff);
-            avatar.visible = false;
-            avatar.position.set(x, 1.2, z);
-            avatar.rotation.y = angle + Math.PI;
-            scene.add(avatar);
-            avatars.push(avatar);
-        }
-    }
-
-    function createAvatar(color) {
-        const group = new THREE.Group();
-        const bodyGeometry = new THREE.CylinderGeometry(0.3, 0.3, 1, 32);
-        const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.2 });
-        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        group.add(body);
-
-        const headGeometry = new THREE.SphereGeometry(0.25, 32, 32);
-        const head = new THREE.Mesh(headGeometry, bodyMaterial);
-        head.position.y = 0.6;
-        group.add(head);
-
-        const ringGeometry = new THREE.TorusGeometry(0.4, 0.05, 16, 100);
-        const ringMaterial = new THREE.MeshBasicMaterial({ color: 0x00F3FF, transparent: true, opacity: 0.5 });
-        const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-        ring.rotation.x = Math.PI / 2;
-        group.add(ring);
-
-        return group;
-    }
-
-    function addParticles() {
-        const particles = 500;
-        const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(particles * 3);
-        for (let i = 0; i < particles; i++) {
-            positions[i * 3] = (Math.random() - 0.5) * 20;
-            positions[i * 3 + 1] = Math.random() * 10;
-            positions[i * 3 + 2] = (Math.random() - 0.5) * 20;
-        }
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        const material = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.05, transparent: true });
-        const particleSystem = new THREE.Points(geometry, material);
-        scene.add(particleSystem);
-    }
-
-    function extractYouTubeId(url) {
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-        const match = url.match(regExp);
-        return (match && match[2].length === 11) ? match[2] : url;
-    }
-
-    function updateDashboard(mode) {
-        if (mode === 'youtube' && state.youtubeVideoId) {
-            const video = document.createElement('video');
-            video.src = `https://www.youtube.com/embed/${state.youtubeVideoId}?autoplay=1`;
-            video.crossOrigin = 'anonymous';
-            video.play();
-            const texture = new THREE.VideoTexture(video);
-            dashboard.material.map = texture;
-            dashboard.material.needsUpdate = true;
-        } else if (mode === 'pdf' && state.pdfDoc) {
-            renderPdfPage(state.currentSlide);
-        }
-    }
-
-    async function renderPdfPage(pageNum) {
-        const page = await state.pdfDoc.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        const renderContext = { canvasContext: canvas.getContext('2d'), viewport };
-        await page.render(renderContext).promise;
-        const texture = new THREE.CanvasTexture(canvas);
-        dashboard.material.map = texture;
-        dashboard.material.needsUpdate = true;
-    }
-
-    function updateSlideCounter() {
-        document.getElementById('slideCounter').textContent = `Slide ${state.currentSlide} / ${state.totalSlides}`;
-    }
-
-    function onClickSit(event) {
-        const raycaster = new THREE.Raycaster();
-        const mouse = new THREE.Vector2((event.clientX / window.innerWidth) * 2 - 1, -(event.clientY / window.innerHeight) * 2 + 1);
-        raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(chairs, true);
-        if (intersects.length > 0) {
-            const chairIndex = chairs.findIndex(chair => {
-                return intersects.some(intersect => intersect.object.parent === chair || chair.children.includes(intersect.object));
+            // Armrests
+            const armGeometry = new THREE.BoxGeometry(0.05, 0.02, 0.3);
+            const armMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00F3FF,
+                metalness: 0.9,
+                roughness: 0.1,
+                emissive: 0x00F3FF,
+                emissiveIntensity: 0.2
             });
-            if (chairIndex !== -1 && avatars[chairIndex] && !avatars[chairIndex].visible) {
-                avatars[chairIndex].visible = true;
-                const color = parseInt(state.selectedAvatarColor.replace('#', '0x'), 16);
-                avatars[chairIndex].children[0].material.color.set(color);
-                avatars[chairIndex].children[1].material.color.set(color);
-                socket.emit('sit-chair', { roomId, chairIndex });
-                camera.position.set(chairs[chairIndex].position.x, 1.6, chairs[chairIndex].position.z + 0.5);
-                controls.lock();
-            }
+
+            const arm1 = new THREE.Mesh(armGeometry, armMaterial);
+            arm1.position.set(0.25, 0.6, 0);
+            chairGroup.add(arm1);
+
+            const arm2 = new THREE.Mesh(armGeometry, armMaterial);
+            arm2.position.set(-0.25, 0.6, 0);
+            chairGroup.add(arm2);
+
+            // Position the entire chair
+            chairGroup.position.set(x, 0, z);
+            chairGroup.rotation.y = angle;
+
+            return chairGroup;
         }
-    }
 
-    function updateAvatars() {
-        avatars.forEach((avatar, i) => {
-            if (avatar) {
-                const participant = state.participants.find(p => p.chairIndex === i);
-                if (participant) {
-                    avatar.visible = true;
-                    const color = parseInt(participant.avatarColor?.replace('#', '0x') || '#ffffff', 16);
-                    avatar.children[0].material.color.set(color);
-                    avatar.children[1].material.color.set(color);
+        function createDashboard() {
+            dashboard = new THREE.Group();
 
-                    // Speaking animation
-                    if (participant.isSpeaking) {
-                        avatar.scale.set(1 + Math.sin(Date.now() / 100) * 0.05, 1 + Math.sin(Date.now() / 100) * 0.05, 1 + Math.sin(Date.now() / 100) * 0.05);
-                    } else {
-                        avatar.scale.set(1, 1, 1);
+            // Main screen - curved holographic display
+            const screenGeometry = new THREE.CylinderGeometry(4, 4, 0.1, 64, 1, false, Math.PI * 0.8, Math.PI * 0.4);
+            const screenMaterial = new THREE.MeshStandardMaterial({
+                color: 0x000000,
+                metalness: 0.1,
+                roughness: 0.1,
+                emissive: 0x7000FF,
+                emissiveIntensity: 0.1,
+                transparent: true,
+                opacity: 0.95,
+                side: THREE.DoubleSide
+            });
+            const screen = new THREE.Mesh(screenGeometry, screenMaterial);
+            screen.rotation.z = Math.PI / 2;
+            screen.rotation.y = Math.PI / 2;
+            screen.position.y = 2;
+            dashboard.add(screen);
+
+            // Screen frame
+            const frameGeometry = new THREE.TorusGeometry(4, 0.1, 16, 64, Math.PI * 0.8);
+            const frameMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00F3FF,
+                metalness: 0.9,
+                roughness: 0.1,
+                emissive: 0x00F3FF,
+                emissiveIntensity: 0.5
+            });
+            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
+            frame.rotation.z = Math.PI / 2;
+            frame.rotation.y = Math.PI / 0.5;
+            frame.position.y = 2;
+            dashboard.add(frame);
+
+            // Stand
+            const standGeometry = new THREE.CylinderGeometry(0.15, 0.2, 3, 32);
+            const standMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2a2a4e,
+                metalness: 0.9,
+                roughness: 0.1
+            });
+            const stand = new THREE.Mesh(standGeometry, standMaterial);
+            stand.position.y = -0.5;
+            stand.castShadow = true;
+            dashboard.add(stand);
+
+            // Base
+            const baseGeometry = new THREE.CylinderGeometry(0.8, 1, 0.15, 32);
+            const baseMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2a2a4e,
+                metalness: 0.9,
+                roughness: 0.1
+            });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = -2;
+            base.castShadow = true;
+            dashboard.add(base);
+
+            // Holographic edge glow
+            const glowGeometry = new THREE.CylinderGeometry(4.05, 4.05, 0.1, 64, 1, false, Math.PI * 0.8, Math.PI * 0.4);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: 0x7000FF,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            glow.rotation.z = Math.PI / 2;
+            glow.rotation.y = Math.PI / 2;
+            glow.position.y = 2.01;
+            dashboard.add(glow);
+
+            dashboard.position.set(0, 0, -8);
+            scene.add(dashboard);
+        }
+
+        function createAvatars() {
+            // Clear existing avatars first
+            avatars.forEach(avatar => scene.remove(avatar));
+            avatars = [];
+
+            state.participants.forEach((participant, index) => {
+                const avatar = createAvatar(participant);
+                if (participant.chair !== null && participant.chair !== undefined) {
+                    // Place avatar at their chair
+                    const chair = chairs[participant.chair];
+                    if (chair) {
+                        avatar.position.copy(chair.position);
+                        avatar.position.y = 0.5;
+                        avatar.rotation.y = chairs[participant.chair].rotation.y;
                     }
                 } else {
-                    avatar.visible = false;
-                    avatar.scale.set(1, 1, 1);
+                    // Random position for the player
+                    avatar.position.set(
+                        (Math.random() - 0.5) * 4,
+                        0,
+                        (Math.random() - 0.5) * 4 + 4
+                    );
+                }
+                avatars.push(avatar);
+                scene.add(avatar);
+            });
+        }
+
+        function createAvatar(participantData) {
+            const avatar = new THREE.Group();
+
+            // Body
+            const bodyGeometry = new THREE.CylinderGeometry(0.2, 0.25, 0.7, 16);
+            const bodyMaterial = new THREE.MeshStandardMaterial({
+                color: participantData.avatar === 0 ? 0x00F3FF : 
+                       participantData.avatar === 1 ? 0xFF6B6B :
+                       participantData.avatar === 2 ? 0x00FF88 :
+                       participantData.avatar === 3 ? 0xFF8E53 : 0x7000FF,
+                metalness: 0.6,
+                roughness: 0.3
+            });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 0.35;
+            avatar.add(body);
+
+            // Head
+            const headGeometry = new THREE.SphereGeometry(0.18, 32, 32);
+            const headMaterial = new THREE.MeshStandardMaterial({
+                color: participantData.avatar === 0 ? 0xFFE4C4 :
+                       participantData.avatar === 1 ? 0xFFDAB9 :
+                       participantData.avatar === 2 ? 0xF5DEB3 :
+                       participantData.avatar === 3 ? 0xDEB887 : 0xFFE4C4,
+                metalness: 0.3,
+                roughness: 0.7
+            });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.y = 0.95;
+            avatar.add(head);
+
+            // Holographic glow ring around avatar
+            const ringGeometry = new THREE.TorusGeometry(0.35, 0.02, 8, 32);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00F3FF,
+                transparent: true,
+                opacity: 0.6
+            });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0.1;
+            avatar.add(ring);
+
+            // Nametag
+            const nametagCanvas = document.createElement('canvas');
+            nametagCanvas.width = 256;
+            nametagCanvas.height = 64;
+            const ctx = nametagCanvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.roundRect(0, 0, 256, 64, 10);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(participantData.name, 128, 42);
+
+            const nametagTexture = new THREE.CanvasTexture(nametagCanvas);
+            const nametagMaterial = new THREE.SpriteMaterial({
+                map: nametagTexture,
+                transparent: true
+            });
+            const nametag = new THREE.Sprite(nametagMaterial);
+            nametag.scale.set(1, 0.25, 1);
+            nametag.position.y = 1.4;
+            avatar.add(nametag);
+
+            avatar.userData = participantData;
+
+            return avatar;
+        }
+
+        function createLighting() {
+            // Ambient light
+            const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+            scene.add(ambientLight);
+
+            // Main spotlight on dashboard
+            const mainSpotlight = new THREE.SpotLight(0x7000FF, 2);
+            mainSpotlight.position.set(0, 10, 0);
+            mainSpotlight.angle = Math.PI / 6;
+            mainSpotlight.penumbra = 0.5;
+            mainSpotlight.decay = 2;
+            mainSpotlight.distance = 30;
+            mainSpotlight.castShadow = true;
+            mainSpotlight.target = dashboard;
+            scene.add(mainSpotlight);
+
+            // Cyan accent lights
+            const accentLight1 = new THREE.PointLight(0x00F3FF, 1, 20);
+            accentLight1.position.set(-10, 5, 0);
+            scene.add(accentLight1);
+
+            const accentLight2 = new THREE.PointLight(0x00F3FF, 1, 20);
+            accentLight2.position.set(10, 5, 0);
+            scene.add(accentLight2);
+
+            // Fill light
+            const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+            fillLight.position.set(0, 10, 10);
+            scene.add(fillLight);
+        }
+
+        function createParticles() {
+            // Floating holographic particles
+            const particleCount = 200;
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 30;
+                positions[i * 3 + 1] = Math.random() * 10;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 30;
+
+                colors[i * 3] = 0;
+                colors[i * 3 + 1] = 0.95;
+                colors[i * 3 + 2] = 1;
+            }
+
+            const particleGeometry = new THREE.BufferGeometry();
+            particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const particleMaterial = new THREE.PointsMaterial({
+                size: 0.05,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+
+            const particles = new THREE.Points(particleGeometry, particleMaterial);
+            particles.userData = { velocities: [] };
+            for (let i = 0; i < particleCount; i++) {
+                particles.userData.velocities.push({
+                    x: (Math.random() - 0.5) * 0.02,
+                    y: Math.random() * 0.02 + 0.01,
+                    z: (Math.random() - 0.5) * 0.02
+                });
+            }
+            scene.add(particles);
+        }
+
+        function setupControls() {
+            // Pointer Lock Controls (First Person)
+            const moveSpeed = 0.1;
+            const lookSpeed = 0.002;
+            const keys = {};
+            let isLocked = false;
+
+            // Mouse look
+            let yaw = 0;
+            let pitch = 0;
+
+            document.addEventListener('click', () => {
+                if (!isLocked && !state.isSitting) {
+                    renderer.domElement.requestPointerLock();
+                }
+            });
+
+            document.addEventListener('pointerlockchange', () => {
+                isLocked = document.pointerLockElement === renderer.domElement;
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (isLocked && !state.isSitting) {
+                    yaw -= e.movementX * lookSpeed;
+                    pitch -= e.movementY * lookSpeed;
+                    pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, pitch));
+                    camera.rotation.order = 'YXZ';
+                    camera.rotation.y = yaw;
+                    camera.rotation.x = pitch;
+                }
+            });
+
+            // Keyboard movement
+            document.addEventListener('keydown', (e) => {
+                keys[e.code] = true;
+                
+                // Push-to-talk
+                if (e.code === 'Space') {
+                    state.isPttActive = true;
+                    document.getElementById('pttIndicator').classList.add('active');
+                    document.getElementById('micBtn').classList.add('speaking');
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                keys[e.code] = false;
+                
+                // End push-to-talk
+                if (e.code === 'Space') {
+                    state.isPttActive = false;
+                    document.getElementById('pttIndicator').classList.remove('active');
+                    document.getElementById('micBtn').classList.remove('speaking');
+                }
+            });
+
+            // Chair interaction
+            renderer.domElement.addEventListener('click', onChairClick);
+            renderer.domElement.addEventListener('mousemove', onChairHover);
+
+            // Store controls for animation loop
+            window.cameraControls = {
+                moveSpeed,
+                keys,
+                isLocked,
+                yaw,
+                pitch,
+                update: function() {
+                    if (isLocked && !state.isSitting) {
+                        const direction = new THREE.Vector3();
+                        const right = new THREE.Vector3();
+
+                        camera.getWorldDirection(direction);
+                        direction.y = 0;
+                        direction.normalize();
+
+                        right.crossVectors(direction, new THREE.Vector3(0, 1, 0));
+
+                        if (keys['KeyW']) camera.position.addScaledVector(direction, moveSpeed);
+                        if (keys['KeyS']) camera.position.addScaledVector(direction, -moveSpeed);
+                        if (keys['KeyA']) camera.position.addScaledVector(right, -moveSpeed);
+                        if (keys['KeyD']) camera.position.addScaledVector(right, moveSpeed);
+
+                        // Clamp position to room bounds
+                        camera.position.x = Math.max(-14, Math.min(14, camera.position.x));
+                        camera.position.z = Math.max(-14, Math.min(14, camera.position.z));
+                    }
+                }
+            };
+        }
+
+        function onChairClick(event) {
+            if (state.isSitting) {
+                // Stand up
+                state.isSitting = false;
+                state.currentChair = null;
+                camera.position.set(0, 1.6, 8);
+                camera.rotation.set(0, 0, 0);
+                window.cameraControls.yaw = 0;
+                window.cameraControls.pitch = 0;
+                showNotification('You stood up');
+                return;
+            }
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(chairs, true);
+
+            if (intersects.length > 0) {
+                let chairObject = intersects[0].object;
+                while (chairObject.parent && !chairObject.userData.hasOwnProperty('index')) {
+                    chairObject = chairObject.parent;
+                }
+
+                if (chairObject.userData.hasOwnProperty('index')) {
+                    const chairIndex = chairObject.userData.index;
+                    if (!chairs[chairIndex].userData.occupied) {
+                        // Sit down
+                        state.isSitting = true;
+                        state.currentChair = chairIndex;
+                        chairs[chairIndex].userData.occupied = true;
+
+                        // Emit sit-chair event via Socket.IO
+                        if (state.socket) {
+                            state.socket.emit('sit-chair', {
+                                roomId: state.roomId,
+                                chairIndex: chairIndex
+                            });
+                        }
+
+                        // Move camera to chair position
+                        const chairPos = chairs[chairIndex].position;
+                        camera.position.set(chairPos.x, 1.3, chairPos.z + 0.5);
+
+                        // Look at dashboard
+                        camera.lookAt(0, 2, -8);
+                        window.cameraControls.yaw = Math.atan2(-camera.position.x, -camera.position.z - 8 - camera.position.z);
+                        window.cameraControls.pitch = -0.2;
+
+                        showNotification(`Sitting at Chair ${chairIndex + 1}`);
+                    } else {
+                        showNotification('Chair is occupied');
+                    }
                 }
             }
-        });
-    }
-
-    function updateParticipantCount() {
-        document.getElementById('participantCount').textContent = `${state.participants.length} participants`;
-    }
-
-    function addChatMessage(user, text) {
-        const container = document.getElementById('chatMessages');
-        const div = document.createElement('div');
-        div.className = 'chat-message';
-        const time = new Date().toLocaleTimeString();
-        div.innerHTML = `<span class="sender">${user}</span> <span class="time">${time}</span><br>${text}`;
-        container.appendChild(div);
-        container.scrollTop = container.scrollHeight;
-    }
-
-    function displayContent(content) {
-        if (content.type === 'pdf' && content.data) {
-            state.currentMode = 'pdf';
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector('[data-tab="pdf"]').classList.add('active');
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.getElementById('pdfTab').classList.add('active');
-
-            const canvas = document.createElement('canvas');
-            pdfjsLib.getDocument(new Uint8Array(content.data)).promise.then(pdf => {
-                state.pdfDoc = pdf;
-                state.totalSlides = pdf.numPages;
-                state.currentSlide = 1;
-                updateSlideCounter();
-                renderPdfPage(1);
-            });
-        } else if (content.type === 'video' && content.data) {
-            state.currentMode = 'youtube';
-            state.youtubeVideoId = content.data;
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector('[data-tab="youtube"]').classList.add('active');
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            document.getElementById('youtubeTab').classList.add('active');
-            updateDashboard('youtube');
         }
-    }
 
-    function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+        function onChairHover(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-    function animate() {
-        avatars.forEach((avatar, i) => {
-            if (avatar && state.participants[i] && state.participants[i].isSpeaking) {
-                avatar.scale.set(1 + Math.sin(Date.now() / 100) * 0.05, 1 + Math.sin(Date.now() / 100) * 0.05, 1 + Math.sin(Date.now() / 100) * 0.05);
-            } else if (avatar) {
-                avatar.scale.set(1, 1, 1);
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(chairs, true);
+
+            const tooltip = document.getElementById('chairTooltip');
+
+            if (intersects.length > 0) {
+                let chairObject = intersects[0].object;
+                while (chairObject.parent && !chairObject.userData.hasOwnProperty('index')) {
+                    chairObject = chairObject.parent;
+                }
+
+                if (chairObject.userData.hasOwnProperty('index')) {
+                    const chairIndex = chairObject.userData.index;
+                    const isOccupied = chairs[chairIndex].userData.occupied;
+                    
+                    tooltip.textContent = isOccupied ? 'Occupied' : `Click to sit at Chair ${chairIndex + 1}`;
+                    tooltip.style.left = event.clientX + 15 + 'px';
+                    tooltip.style.top = event.clientY + 15 + 'px';
+                    tooltip.classList.add('visible');
+                    
+                    clearTimeout(hoverTimeout);
+                }
+            } else {
+                tooltip.classList.remove('visible');
             }
-        });
-        renderer.render(scene, camera);
+        }
+
+        function setupUI() {
+            // Room link copy
+            document.getElementById('roomId').addEventListener('click', () => {
+                navigator.clipboard.writeText(`https://holomeet.vr/room/${state.roomId}`);
+                showNotification('Room link copied to clipboard!');
+            });
+
+            // Microphone toggle
+            document.getElementById('micBtn').addEventListener('click', () => {
+                state.isMicOn = !state.isMicOn;
+                const btn = document.getElementById('micBtn');
+                if (state.isMicOn) {
+                    btn.classList.remove('muted');
+                    showNotification('Microphone enabled');
+                } else {
+                    btn.classList.add('muted');
+                    showNotification('Microphone muted');
+                }
+            });
+
+            // PTT Mode toggle
+            document.getElementById('pttModeBtn').addEventListener('click', () => {
+                state.isPttMode = !state.isPttMode;
+                const btn = document.getElementById('pttModeBtn');
+                if (state.isPttMode) {
+                    btn.classList.add('active');
+                    showNotification('Push-to-Talk mode enabled');
+                } else {
+                    btn.classList.remove('active');
+                    showNotification('Open mic mode');
+                }
+            });
+
+            // Dashboard tabs
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.getElementById(btn.dataset.tab + 'Tab').classList.add('active');
+                    state.currentMode = btn.dataset.tab;
+                });
+            });
+
+            // YouTube video load
+            document.getElementById('loadVideo').addEventListener('click', () => {
+                const input = document.getElementById('youtubeUrl').value;
+                const videoId = extractYouTubeId(input);
+                if (videoId) {
+                    state.youtubeVideoId = videoId;
+                    showNotification('Video loaded on dashboard');
+                } else {
+                    showNotification('Invalid YouTube URL');
+                }
+            });
+
+            // PDF load
+            document.getElementById('loadPdf').addEventListener('click', () => {
+                const input = document.getElementById('pdfUrl').value;
+                if (input) {
+                    state.pdfUrl = input;
+                    state.currentSlide = 1;
+                    state.totalSlides = 5; // Demo value
+                    updateSlideCounter();
+                    showNotification('PDF loaded - Slide 1');
+                }
+            });
+
+            // Slide navigation
+            document.getElementById('prevSlide').addEventListener('click', () => {
+                if (state.currentSlide > 1) {
+                    state.currentSlide--;
+                    updateSlideCounter();
+                }
+            });
+
+            document.getElementById('nextSlide').addEventListener('click', () => {
+                if (state.currentSlide < state.totalSlides) {
+                    state.currentSlide++;
+                    updateSlideCounter();
+                }
+            });
+
+            // Avatar selection
+            document.querySelectorAll('.avatar-option').forEach(option => {
+                option.addEventListener('click', () => {
+                    document.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
+                    option.classList.add('selected');
+                    state.selectedAvatar = parseInt(option.dataset.avatar);
+                    showNotification(`Avatar ${state.selectedAvatar + 1} selected`);
+                });
+            });
+
+            // Randomize avatar
+            document.getElementById('randomizeAvatar').addEventListener('click', () => {
+                const random = Math.floor(Math.random() * 5);
+                document.querySelectorAll('.avatar-option').forEach(o => o.classList.remove('selected'));
+                document.querySelector(`[data-avatar="${random}"]`).classList.add('selected');
+                state.selectedAvatar = random;
+                showNotification(`Random avatar selected`);
+            });
+
+            // Present button
+            document.getElementById('presentBtn').addEventListener('click', () => {
+                openFullscreenDashboard();
+            });
+
+            // Close dashboard
+            document.getElementById('closeDashboard').addEventListener('click', () => {
+                document.getElementById('dashboardFullscreen').classList.remove('active');
+            });
+
+            // Leave room
+            document.getElementById('leaveBtn').addEventListener('click', () => {
+                showNotification('Leaving room...');
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            });
+        }
+
+        function extractYouTubeId(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        function updateSlideCounter() {
+            document.getElementById('slideCounter').textContent = `Slide ${state.currentSlide} / ${state.totalSlides}`;
+        }
+
+        function openFullscreenDashboard() {
+            const fullscreen = document.getElementById('dashboardFullscreen');
+            const content = document.getElementById('dashboardContent');
+            
+            fullscreen.classList.add('active');
+
+            if (state.currentMode === 'youtube' && state.youtubeVideoId) {
+                document.getElementById('dashboardTitle').textContent = 'YouTube Presentation';
+                content.innerHTML = `
+                    <div class="dashboard-youtube-container">
+                        <iframe src="https://www.youtube.com/embed/${state.youtubeVideoId}?autoplay=1"
+                                title="YouTube video player"
+                                frameborder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowfullscreen
+                                referrerpolicy="strict-origin-when-cross-origin"></iframe>
+                    </div>
+                `;
+            } else if (state.currentMode === 'pdf' && state.pdfUrl) {
+                document.getElementById('dashboardTitle').textContent = 'PDF Presentation';
+                content.innerHTML = `
+                    <div class="dashboard-pdf-container">
+                        <div class="pdf-toolbar">
+                            <button class="nav-btn" onclick="prevPdfPage()">◀</button>
+                            <span class="pdf-page-info" id="pdfPageInfo">Page ${state.currentSlide} of ${state.totalSlides}</span>
+                            <button class="nav-btn" onclick="nextPdfPage()">▶</button>
+                        </div>
+                        <div class="pdf-canvas-wrapper">
+                            <canvas id="pdfCanvas"></canvas>
+                        </div>
+                    </div>
+                `;
+                // Draw placeholder PDF content
+                drawPdfPlaceholder();
+            } else {
+                document.getElementById('dashboardTitle').textContent = 'Dashboard';
+                content.innerHTML = `
+                    <div style="color: #fff; text-align: center;">
+                        <p style="font-size: 18px; margin-bottom: 20px;">No content loaded</p>
+                        <p style="color: #888;">Load a YouTube video or PDF from the control panel</p>
+                    </div>
+                `;
+            }
+        }
+
+        function drawPdfPlaceholder() {
+            const canvas = document.getElementById('pdfCanvas');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            canvas.width = 800;
+            canvas.height = 600;
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(50, 50, 700, 500);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('PDF Presentation', canvas.width / 2, canvas.height / 2 - 50);
+            
+            ctx.font = '24px Arial';
+            ctx.fillStyle = '#888888';
+            ctx.fillText(`Slide ${state.currentSlide}`, canvas.width / 2, canvas.height / 2 + 20);
+            
+            document.getElementById('pdfPageInfo').textContent = `Page ${state.currentSlide} of ${state.totalSlides}`;
+        }
+
+        function showNotification(message) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.add('show');
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            // Update camera controls
+            if (window.cameraControls) {
+                window.cameraControls.update();
+            }
+
+            // Animate dashboard glow
+            const dashboardGlow = dashboard.children.find(c => c.material && c.material.emissive);
+            if (dashboardGlow) {
+                dashboardGlow.material.emissiveIntensity = 0.3 + Math.sin(time * 2) * 0.1;
+            }
+
+            // Animate particles
+            scene.children.forEach(child => {
+                if (child.userData && child.userData.velocities) {
+                    const positions = child.geometry.attributes.position.array;
+                    child.userData.velocities.forEach((vel, i) => {
+                        positions[i * 3] += vel.x;
+                        positions[i * 3 + 1] += vel.y;
+                        positions[i * 3 + 2] += vel.z;
+
+                        if (positions[i * 3 + 1] > 10) {
+                            positions[i * 3 + 1] = 0;
+                        }
+                    });
+                    child.geometry.attributes.position.needsUpdate = true;
+                }
+            });
+
+            // Animate avatar rings
+            avatars.forEach((avatar, index) => {
+                const ring = avatar.children.find(c => c.geometry && c.geometry.type === 'TorusGeometry');
+                if (ring) {
+                    ring.rotation.z += delta * 0.5;
+                }
+                
+                // Speaking animation
+                if (state.participants[index] && state.participants[index].isSpeaking) {
+                    avatar.scale.y = 1 + Math.sin(time * 10) * 0.05;
+                }
+            });
+
+            // Update participant count
+            document.getElementById('participantCount').textContent = 
+                `${state.participants.length} participants`;
+
+            renderer.render(scene, camera);
+        }
+
+        // Initialize on load
+        window.addEventListener('load', init);
+    </script>
+
+<script>
+/**
+ * Iframe 元素高亮注入脚本
+ * 需要在目标网站中引入此脚本来支持跨域 iframe 高亮功能
+ *
+ * 使用方法：
+ * 1. 将此脚本添加到目标网站的 HTML 中
+ * 2. 或通过浏览器扩展、用户脚本等方式注入
+ */
+
+(function () {
+  "use strict";
+
+  // 检查是否在 iframe 中
+  if (window.self === window.top) {
+    return; // 不在 iframe 中，不执行
+  }
+
+  // 检查是否已经初始化过
+  if (window.__iframeHighlightInitialized) {
+    return;
+  }
+  window.__iframeHighlightInitialized = true;
+  console.log("Iframe 高亮脚本已加载");
+
+  // 创建高亮覆盖层
+  var overlay = document.createElement("div");
+  overlay.id = "iframe-highlight-overlay";
+  overlay.style.cssText = "\n    position: fixed;\n    top: 0;\n    left: 0;\n    width: 100vw;\n    height: 100vh;\n    pointer-events: none;\n    z-index: 999999;\n    overflow: hidden;\n  ";
+
+  // 创建悬停高亮框（虚线边框）
+  var highlightBox = document.createElement("div");
+  highlightBox.id = "iframe-highlight-box";
+  highlightBox.style.cssText = "\n    position: absolute;\n    border: 2px dashed #007AFF;\n    background: rgba(0, 122, 255, 0.08);\n    pointer-events: none;\n    display: none;\n    transition: all 0.1s ease;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.8);\n    border-radius: 2px;\n  ";
+
+  // 创建选中节点的常驻高亮框（实线边框）
+  var selectedBox = document.createElement("div");
+  selectedBox.id = "iframe-selected-box";
+  selectedBox.style.cssText = "\n    position: absolute;\n    border: 2px solid #007AFF;\n    pointer-events: none;\n    display: none;\n    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 107, 53, 0.4);\n    border-radius: 2px;\n    z-index: 1000000;\n  ";
+
+  // 创建悬停标签显示
+  var tagLabel = document.createElement("div");
+  tagLabel.id = "iframe-tag-label";
+  tagLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 2px 6px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 2px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000001;\n    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);\n    font-weight: 500;\n  ";
+
+  // 创建选中节点标签
+  var selectedLabel = document.createElement("div");
+  selectedLabel.id = "iframe-selected-label";
+  selectedLabel.style.cssText = "\n    position: absolute;\n    background: #007AFF;\n    color: white;\n    padding: 3px 8px;\n    font-size: 11px;\n    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;\n    border-radius: 3px;\n    pointer-events: none;\n    display: none;\n    white-space: nowrap;\n    z-index: 1000002;\n    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);\n    font-weight: 600;\n  ";
+  overlay.appendChild(highlightBox);
+  overlay.appendChild(selectedBox);
+  overlay.appendChild(tagLabel);
+  overlay.appendChild(selectedLabel);
+  document.body.appendChild(overlay);
+
+  // 存储当前选中的元素
+  var selectedElement = null;
+  var highlightEnabled = false;
+
+  // 更新选中元素的高亮显示
+  function updateSelectedHighlight(element) {
+    console.log("updateSelectedHighlight called with:", element);
+    if (!element) {
+      selectedBox.style.display = "none";
+      selectedLabel.style.display = "none";
+      selectedElement = null;
+      console.log("Cleared selected highlight");
+      return;
+    }
+    selectedElement = element;
+    var rect = element.getBoundingClientRect();
+    console.log("Selected element rect:", rect);
+
+    // 更新选中高亮框位置
+    selectedBox.style.display = "block";
+    selectedBox.style.left = "".concat(rect.left - 2, "px");
+    selectedBox.style.top = "".concat(rect.top - 2, "px");
+    selectedBox.style.width = "".concat(rect.width + 4, "px");
+    selectedBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新选中标签位置和内容
+    selectedLabel.style.display = "block";
+    selectedLabel.textContent = "\u2713 <".concat(element.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 28;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 5) {
+      labelTop = rect.bottom + 5;
     }
 
-    function joinRoom() {
-        const nameInput = document.getElementById('username-input').value.trim();
-        const roomInput = document.getElementById('room-input').value.trim();
+    // 如果标签会超出右侧，向左调整
+    var labelWidth = selectedLabel.offsetWidth || 100; // 预估宽度
+    if (labelLeft + labelWidth > window.innerWidth - 10) {
+      labelLeft = window.innerWidth - labelWidth - 10;
+    }
+    selectedLabel.style.left = "".concat(Math.max(5, labelLeft), "px");
+    selectedLabel.style.top = "".concat(labelTop, "px");
+    console.log("Selected highlight positioned at:", {
+      left: selectedBox.style.left,
+      top: selectedBox.style.top,
+      width: selectedBox.style.width,
+      height: selectedBox.style.height
+    });
+  }
+  function getElementSelector(element) {
+    if (!(element instanceof Element)) throw new Error('Argument must be a DOM element');
+    var segments = [];
+    var current = element;
+    while (current !== document.documentElement) {
+      var selector = '';
+      // 优先检查唯一ID
+      if (current.id && document.querySelectorAll("#".concat(current.id)).length === 1) {
+        segments.unshift("#".concat(current.id));
+        break; // ID唯一，无需继续向上
+      }
 
-        if (nameInput) username = nameInput;
-        if (roomInput) roomId = roomInput;
+      // 生成类名选择器（取第一个有效类名）
+      var classes = Array.from(current.classList).filter(function (c) {
+        return !c.startsWith('js-');
+      });
+      var className = classes.length > 0 ? ".".concat(classes[0]) : '';
 
-        document.getElementById('login-modal').classList.add('hidden');
-        initializeConnections();
+      // 生成位置索引（nth-child）
+      var tag = current.tagName.toLowerCase();
+      if (!className) {
+        var siblings = Array.from(current.parentNode.children);
+        var index = siblings.findIndex(function (el) {
+          return el === current;
+        }) + 1;
+        selector = "".concat(tag, ":nth-child(").concat(index, ")");
+      } else {
+        selector = className;
+      }
+      segments.unshift(selector);
+      current = current.parentElement;
     }
 
-    window.joinRoom = joinRoom;
-    window.onload = init;
+    // 处理根元素
+    if (current === document.documentElement) {
+      segments.unshift('html');
+    }
+    return segments.join(' > ');
+  }
+
+  // 获取元素文本内容
+  function getElementText(element) {
+    var _element$textContent;
+    if (element.tagName === "INPUT") {
+      return element.value || element.placeholder || "";
+    }
+    if (element.tagName === "TEXTAREA") {
+      return element.value || element.placeholder || "";
+    }
+    var text = ((_element$textContent = element.textContent) === null || _element$textContent === void 0 ? void 0 : _element$textContent.trim()) || "";
+    return text.length > 50 ? text.substring(0, 50) + "..." : text;
+  }
+
+  // 获取元素属性信息
+  function getElementAttributes(element) {
+    var attrs = {};
+    for (var i = 0; i < element.attributes.length; i++) {
+      var attr = element.attributes[i];
+      attrs[attr.name] = attr.value;
+    }
+    return attrs;
+  }
+
+  // 鼠标悬停事件处理
+  function handleMouseOver(e) {
+    if (!highlightEnabled) return;
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免高亮 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 如果是已选中的元素，不显示悬停高亮
+    if (target === selectedElement) {
+      highlightBox.style.display = "none";
+      tagLabel.style.display = "none";
+      return;
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+
+    // 更新悬停高亮框位置
+    highlightBox.style.display = "block";
+    highlightBox.style.left = "".concat(rect.left - 2, "px");
+    highlightBox.style.top = "".concat(rect.top - 2, "px");
+    highlightBox.style.width = "".concat(rect.width + 4, "px");
+    highlightBox.style.height = "".concat(rect.height + 4, "px");
+
+    // 更新标签位置和内容
+    tagLabel.style.display = "block";
+    tagLabel.textContent = "<".concat(target.tagName.toLowerCase(), ">");
+
+    // 计算标签位置，确保不超出视窗
+    var labelTop = rect.top - 22;
+    var labelLeft = rect.left;
+
+    // 如果标签会超出顶部，显示在元素下方
+    if (labelTop < 0) {
+      labelTop = rect.bottom + 5;
+    }
+
+    // 如果标签会超出右侧，向左调整
+    if (labelLeft + tagLabel.offsetWidth > window.innerWidth) {
+      labelLeft = window.innerWidth - tagLabel.offsetWidth - 5;
+    }
+    tagLabel.style.left = "".concat(Math.max(0, labelLeft), "px");
+    tagLabel.style.top = "".concat(labelTop, "px");
+
+    // 发送消息到父窗口
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 鼠标离开事件处理
+  function handleMouseOut(e) {
+    if (!highlightEnabled) return;
+    var relatedTarget = e.relatedTarget;
+
+    // 如果鼠标移动到高亮相关元素上，不隐藏高亮
+    if (relatedTarget && (relatedTarget === highlightBox || relatedTarget === tagLabel || relatedTarget === overlay || relatedTarget === selectedBox || relatedTarget === selectedLabel)) {
+      return;
+    }
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-hover",
+        data: null,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 点击事件处理
+  function handleClick(e) {
+    var target = e.target;
+    if (!target || target === overlay || target === highlightBox || target === tagLabel || target === selectedBox || target === selectedLabel) {
+      return;
+    }
+
+    // 避免处理 html 和 body 元素
+    if (target === document.documentElement || target === document.body) {
+      return;
+    }
+
+    // 检查是否是交互元素，这些元素需要保留默认行为
+    var isInteractiveElement = ['input', 'textarea', 'select', 'button', 'a'].includes(target.tagName.toLowerCase());
+
+    // 如果高亮功能启用，对于非交互元素阻止默认行为和事件传播
+    if (highlightEnabled) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    var rect = target.getBoundingClientRect();
+    var selector = getElementSelector(target);
+    var text = getElementText(target);
+    var attributes = getElementAttributes(target);
+    console.log("Element clicked:", {
+      tagName: target.tagName,
+      selector: selector,
+      rect: rect
+    });
+
+    // 立即更新选中高亮
+    updateSelectedHighlight(target);
+
+    // 隐藏悬停高亮，因为现在是选中状态
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    var elementInfo = {
+      tagName: target.tagName.toLowerCase(),
+      rect: {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+        width: rect.width,
+        height: rect.height,
+        x: rect.x,
+        y: rect.y
+      },
+      selector: selector,
+      text: text,
+      attributes: attributes,
+      url: window.location.href,
+      path: window.location.pathname,
+      timestamp: Date.now()
+    };
+    try {
+      window.parent.postMessage({
+        type: "iframe-element-click",
+        data: elementInfo,
+        source: "iframe-highlight-injector"
+      }, "*");
+    } catch (error) {
+      console.warn("无法发送消息到父窗口:", error);
+    }
+  }
+
+  // 监听来自父窗口的消息
+  function handleParentMessage(event) {
+    console.log("Received message from parent:", event.data);
+    if (event.data.type === "iframe-highlight-toggle") {
+      var enabled = event.data.enabled;
+      console.log("Highlight toggle:", enabled);
+      if (enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "enable-iframe-highlight") {
+      console.log("Enable iframe highlight");
+      enableHighlight();
+    } else if (event.data.type === "disable-iframe-highlight") {
+      console.log("Disable iframe highlight");
+      disableHighlight();
+    } else if (event.data.type === "toggle-iframe-highlight") {
+      var _enabled = event.data.enabled !== undefined ? event.data.enabled : !highlightEnabled;
+      console.log("Toggle iframe highlight to:", _enabled);
+      if (_enabled) {
+        enableHighlight();
+      } else {
+        disableHighlight();
+      }
+    } else if (event.data.type === "update-selected-element") {
+      var selector = event.data.selector;
+      console.log("Update selected element with selector:", selector);
+      if (selector) {
+        try {
+          var element = document.querySelector(selector);
+          console.log("Found element by selector:", element);
+          updateSelectedHighlight(element);
+        } catch (error) {
+          console.warn("Failed to select element:", error);
+          updateSelectedHighlight(null);
+        }
+      } else {
+        updateSelectedHighlight(null);
+      }
+    } else if (event.data.type === "clear-selected-element") {
+      console.log("Clear selected element");
+      updateSelectedHighlight(null);
+    }
+  }
+
+  // 启用高亮功能
+  function enableHighlight() {
+    console.log("Enabling highlight");
+    document.addEventListener("mouseover", handleMouseOver, true);
+    document.addEventListener("mouseout", handleMouseOut, true);
+    document.addEventListener("click", handleClick, true);
+    highlightEnabled = true;
+    overlay.style.display = "block";
+  }
+
+  // 禁用高亮功能
+  function disableHighlight() {
+    console.log("Disabling highlight");
+    highlightEnabled = false;
+    // 保持事件监听器，但通过 highlightEnabled 变量控制行为
+    // 这样可以保留选中状态的显示
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    // 不隐藏 selectedBox 和 selectedLabel，保留选中状态
+  }
+
+  // 完全禁用高亮功能（移除所有监听器）
+  function fullyDisableHighlight() {
+    console.log("Fully disabling highlight");
+    highlightEnabled = false;
+    document.removeEventListener("mouseover", handleMouseOver, true);
+    document.removeEventListener("mouseout", handleMouseOut, true);
+    document.removeEventListener("click", handleClick, true);
+    overlay.style.display = "none";
+    highlightBox.style.display = "none";
+    tagLabel.style.display = "none";
+    selectedBox.style.display = "none";
+    selectedLabel.style.display = "none";
+  }
+
+  // 添加事件监听
+  enableHighlight();
+  window.addEventListener("message", handleParentMessage);
+
+  // 暴露全局函数供外部调用
+  window.__iframeHighlightControl = {
+    enable: enableHighlight,
+    disable: disableHighlight,
+    fullyDisable: fullyDisableHighlight,
+    isEnabled: function isEnabled() {
+      return highlightEnabled;
+    },
+    getSelectedElement: function getSelectedElement() {
+      return selectedElement;
+    },
+    updateSelected: updateSelectedHighlight,
+    // 通过消息发送开关控制
+    sendToggleMessage: function sendToggleMessage(enabled) {
+      window.parent.postMessage({
+        type: 'iframe-highlight-status',
+        enabled: enabled || highlightEnabled,
+        source: 'iframe-highlight-injector'
+      }, '*');
+    }
+  };
+
+  // 通知父窗口脚本已加载
+  try {
+    window.parent.postMessage({
+      type: "iframe-highlight-ready",
+      data: {
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: Date.now()
+      },
+      source: "iframe-highlight-injector"
+    }, "*");
+  } catch (error) {
+    console.warn("无法发送就绪消息到父窗口:", error);
+  }
+
+  // 清理函数
+  window.__iframeHighlightCleanup = function () {
+    fullyDisableHighlight();
+    window.removeEventListener("message", handleParentMessage);
+    if (overlay.parentElement) {
+      overlay.parentElement.removeChild(overlay);
+    }
+    delete window.__iframeHighlightInitialized;
+    delete window.__iframeHighlightCleanup;
+  };
+})();
+
 </script>
 </body>
 </html>
