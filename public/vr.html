@@ -1,221 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>HoloMeet VR</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
 
   <style>
-    body { margin:0; overflow:hidden; background:#000; font-family:sans-serif; }
-    #ui {
-      position:fixed;
-      bottom:20px;
-      left:20px;
-      z-index:10;
-    }
-    button {
-      padding:10px 14px;
-      margin-right:6px;
-      font-size:14px;
-    }
+    body { margin: 0; overflow: hidden; }
   </style>
 </head>
+
 <body>
+<a-scene
+  vr-mode-ui="enabled: true"
+  embedded
+  physics="debug: false">
 
-<div id="ui">
-  <button id="standBtn">Stand up</button>
-</div>
+  <!-- 🌍 LUCES -->
+  <a-entity light="type: ambient; intensity: 0.6"></a-entity>
+  <a-entity light="type: directional; intensity: 0.8" position="5 10 5"></a-entity>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.158/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.158/examples/js/loaders/GLTFLoader.js"></script>
+  <!-- 🏢 SALA SKETCHFAB -->
+  <a-entity
+    id="room"
+    gltf-model="url(/Untitled.glb)"
+    position="0 0 0"
+    scale="1 1 1"
+    static-body>
+  </a-entity>
 
-<script>
-/* ===============================
-   SOCKET
-================================ */
-const socket = io();
+  <!-- 🪑 SILLAS (7) -->
+  <a-entity id="chairs">
+    <a-entity class="chair" id="chair-0" position="0 0 -2" static-body></a-entity>
+    <a-entity class="chair" id="chair-1" position="1 0 -2" static-body></a-entity>
+    <a-entity class="chair" id="chair-2" position="-1 0 -2" static-body></a-entity>
+    <a-entity class="chair" id="chair-3" position="0 0 -3" static-body></a-entity>
+    <a-entity class="chair" id="chair-4" position="1 0 -3" static-body></a-entity>
+    <a-entity class="chair" id="chair-5" position="-1 0 -3" static-body></a-entity>
+    <a-entity class="chair" id="chair-6" position="0 0 -4" static-body></a-entity>
+  </a-entity>
 
-/* ===============================
-   THREE BASICS
-================================ */
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111111);
+  <!-- 👤 PLAYER RIG -->
+  <a-entity id="rig" position="0 0 3">
+    <a-entity
+      id="player"
+      camera
+      look-controls
+      wasd-controls="acceleration: 25"
+      collision-detector>
+    </a-entity>
+  </a-entity>
 
-const camera = new THREE.PerspectiveCamera(
-  60, window.innerWidth/window.innerHeight, 0.1, 100
-);
-camera.position.set(0, 1.6, 3);
-
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
-
-/* ===============================
-   LIGHTING (para Sketchfab room)
-================================ */
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
-
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
-dirLight.position.set(5,10,5);
-scene.add(dirLight);
-
-/* ===============================
-   FLOOR (fallback)
-================================ */
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(50,50),
-  new THREE.MeshStandardMaterial({ color:0x222222 })
-);
-floor.rotation.x = -Math.PI/2;
-scene.add(floor);
-
-/* ===============================
-   GLOBALS
-================================ */
-const loader = new THREE.GLTFLoader();
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-
-const chairs = [];
-let currentChair = null;
-let isSitting = false;
-
-/* ===============================
-   AVATAR (simple placeholder)
-================================ */
-const avatar = new THREE.Mesh(
-  new THREE.CapsuleGeometry(0.25, 1.0, 4, 8),
-  new THREE.MeshStandardMaterial({ color:0x00ffff })
-);
-avatar.position.set(0, 0.9, 0);
-scene.add(avatar);
-
-/* ===============================
-   LOAD OFFICE (Sketchfab GLB)
-================================ */
-loader.load("/Untitled.glb", gltf => {
-
-  const room = gltf.scene;
-  room.scale.set(1,1,1);
-  scene.add(room);
-
-  // detectar sillas reales
-  room.traverse(obj => {
-    if (
-      obj.isMesh &&
-      obj.name.toLowerCase().includes("chair")
-    ) {
-      obj.userData.isChair = true;
-      obj.userData.occupied = false;
-      obj.userData.by = null;
-      chairs.push(obj);
-    }
-  });
-
-});
-
-/* ===============================
-   INTERACTION
-================================ */
-window.addEventListener("click", e => {
-
-  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, camera);
-  const hits = raycaster.intersectObjects(scene.children, true);
-
-  for (let hit of hits) {
-    if (hit.object.userData.isChair) {
-      sitOnChair(hit.object);
-      break;
-    }
-  }
-});
-
-/* ===============================
-   SIT / STAND
-================================ */
-function sitOnChair(chair) {
-
-  if (chair.userData.occupied) {
-    alert("Esta silla está ocupada");
-    return;
-  }
-
-  if (currentChair) {
-    freeChair(currentChair);
-  }
-
-  chair.userData.occupied = true;
-  chair.userData.by = socket.id;
-  currentChair = chair;
-  isSitting = true;
-
-  const pos = new THREE.Vector3();
-  chair.getWorldPosition(pos);
-
-  avatar.position.copy(pos);
-  avatar.position.y += 0.4;
-
-  socket.emit("chair-occupied", {
-    chairName: chair.name,
-    by: socket.id
-  });
-}
-
-function freeChair(chair) {
-  chair.userData.occupied = false;
-  chair.userData.by = null;
-
-  socket.emit("chair-freed", {
-    chairName: chair.name
-  });
-}
-
-document.getElementById("standBtn").onclick = () => {
-  if (!isSitting || !currentChair) return;
-
-  freeChair(currentChair);
-  currentChair = null;
-  isSitting = false;
-
-  avatar.position.y += 0.4;
-};
-
-/* ===============================
-   SOCKET SYNC
-================================ */
-socket.on("chair-occupied", data => {
-  const chair = chairs.find(c => c.name === data.chairName);
-  if (!chair) return;
-  chair.userData.occupied = true;
-  chair.userData.by = data.by;
-});
-
-socket.on("chair-freed", data => {
-  const chair = chairs.find(c => c.name === data.chairName);
-  if (!chair) return;
-  chair.userData.occupied = false;
-  chair.userData.by = null;
-});
-
-/* ===============================
-   RENDER LOOP
-================================ */
-function animate() {
-  requestAnimationFrame(animate);
-  renderer.render(scene, camera);
-}
-animate();
-
-window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-</script>
-
+</a-scene>
 </body>
 </html>
