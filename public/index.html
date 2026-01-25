@@ -1,171 +1,102 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>HoloMeet – Conference Room</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8" />
+  <title>HoloMeet – Conference Room</title>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/PointerLockControls.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/loaders/GLTFLoader.js"></script>
-<script src="/socket.io/socket.io.js"></script>
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 
-<style>
-body{margin:0;overflow:hidden;background:#000;font-family:monospace}
-.hud{position:fixed;color:#00f3ff;border:1px solid #00f3ff;
-padding:6px;background:rgba(0,0,0,.6)}
-#roomHud{top:10px;left:10px}
-#utc{top:10px;right:10px}
-button{background:#00f3ff;border:none;padding:6px 10px;font-weight:bold}
-</style>
+  <!-- Extras (movement, controls) -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
+
+  <!-- Physics -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@4.0.1/dist/aframe-physics-system.min.js"></script>
+
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+    #hint {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.7);
+      color: #0ff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 14px;
+      z-index: 10;
+    }
+  </style>
 </head>
 
 <body>
-<div id="roomHud" class="hud">ROOM: <span id="room"></span></div>
-<div id="utc" class="hud">UTC --:--</div>
 
-<script>
-/* ================== SESSION ================== */
-const params=new URLSearchParams(location.search);
-const ROOM=params.get("room")||"ROOM";
-document.getElementById("room").textContent=ROOM;
+<div id="hint">
+  WASD para moverte · Mouse para mirar
+</div>
 
-/* ================== SOCKET ================== */
-const socket=io();
-socket.emit("join-room",{roomId:ROOM,username:"Guest"});
+<a-scene
+  background="color: #000"
+  renderer="antialias: true; physicallyCorrectLights: true"
+  physics="gravity: -9.8"
+  vr-mode-ui="enabled: true"
+>
 
-/* ================== THREE ================== */
-const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x000000);
+  <!-- ASSETS -->
+  <a-assets>
+    <a-asset-item id="roomModel" src="meeting_room.glb"></a-asset-item>
+  </a-assets>
 
-const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,100);
-camera.position.set(0,1.6,5);
+  <!-- LUCES -->
+  <a-entity light="type: ambient; intensity: 0.6"></a-entity>
 
-const renderer=new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(innerWidth,innerHeight);
-renderer.xr.enabled=true;
-document.body.appendChild(renderer.domElement);
+  <a-entity
+    light="type: directional; intensity: 1.1"
+    position="5 10 5"
+    rotation="-45 45 0">
+  </a-entity>
 
-/* ================== LIGHT ================== */
-scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1));
-const dl=new THREE.DirectionalLight(0xffffff,.8);
-dl.position.set(5,10,2);scene.add(dl);
+  <a-entity
+    light="type: point; intensity: 0.8; distance: 40"
+    position="0 6 0">
+  </a-entity>
 
-/* ================== CONTROLS ================== */
-const controls=new THREE.PointerLockControls(camera,document.body);
-document.body.onclick=()=>controls.lock();
-const keys={};onkeydown=e=>keys[e.code]=true;onkeyup=e=>keys[e.code]=false;
+  <!-- SALA 3D -->
+  <a-entity
+    gltf-model="#roomModel"
+    position="0 0 0"
+    rotation="0 0 0"
+    scale="1 1 1"
+    static-body>
+  </a-entity>
 
-/* ================== PLAYER ================== */
-const player=new THREE.Mesh(
- new THREE.CapsuleGeometry(.25,1.1),
- new THREE.MeshStandardMaterial({color:0x00f3ff})
-);
-player.position.set(0,1,5);
-scene.add(player);
+  <!-- PISO INVISIBLE (COLISIONES) -->
+  <a-plane
+    position="0 0 0"
+    rotation="-90 0 0"
+    width="50"
+    height="50"
+    color="#000"
+    static-body
+    visible="false">
+  </a-plane>
 
-/* ================== OTHERS ================== */
-const others={};
+  <!-- JUGADOR -->
+  <a-entity
+    id="player"
+    position="0 1.6 4"
+    movement-controls="speed: 0.12"
+    kinematic-body
+  >
+    <a-entity
+      camera
+      look-controls="pointerLockEnabled: true">
+    </a-entity>
+  </a-entity>
 
-/* ================== AUDIO ================== */
-const audioCtx=new AudioContext();
-navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
- const src=audioCtx.createMediaStreamSource(stream);
- socket.on("room-users",users=>{
-  users.forEach(u=>{
-   if(u.id===socket.id)return;
-   if(!others[u.id].audio){
-    const p=audioCtx.createPanner();
-    p.panningModel="HRTF";
-    p.distanceModel="inverse";
-    p.refDistance=1;
-    p.maxDistance=20;
-    src.connect(p).connect(audioCtx.destination);
-    others[u.id].audio=p;
-   }
-  });
- });
-});
+</a-scene>
 
-/* ================== ROOM ================== */
-const loader=new THREE.GLTFLoader();
-const chairs={};
-loader.load("./Untitled.glb",g=>{
- g.scene.traverse(o=>{
-  if(o.isMesh && o.name.includes("chair")){
-   chairs[o.name]={mesh:o,occupied:false};
-  }
- });
- scene.add(g.scene);
-});
-
-/* ================== NETWORK ================== */
-let lastSend=0;
-socket.on("room-users",users=>{
- users.forEach(u=>{
-  if(u.id===socket.id)return;
-  if(!others[u.id]){
-   const m=new THREE.Mesh(
-    new THREE.CapsuleGeometry(.25,1.1),
-    new THREE.MeshStandardMaterial({color:0xff00ff})
-   );
-   scene.add(m);
-   others[u.id]={mesh:m,pos:new THREE.Vector3()};
-  }
-  others[u.id].pos.set(u.x||0,u.sitting?.6:1,u.z||0);
-  others[u.id].rot=u.rot||0;
-  others[u.id].mesh.material.emissive.set(u.isSpeaking?0x00ff00:0x000000);
- });
-});
-
-/* ================== LOOP ================== */
-function animate(t){
- requestAnimationFrame(animate);
-
- const speed=.05;
- const dir=new THREE.Vector3();
- camera.getWorldDirection(dir);
-
- if(keys.KeyW)player.position.addScaledVector(dir,speed);
- if(keys.KeyS)player.position.addScaledVector(dir,-speed);
- if(keys.KeyA)player.position.x-=speed;
- if(keys.KeyD)player.position.x+=speed;
-
- camera.position.lerp(player.position.clone().add(new THREE.Vector3(0,1.6,0)),.3);
- camera.rotation.y=player.rotation.y;
-
- Object.values(others).forEach(o=>{
-  o.mesh.position.lerp(o.pos,.15);
-  o.mesh.rotation.y+=((o.rot||0)-o.mesh.rotation.y)*.15;
-  if(o.audio)o.audio.setPosition(
-   o.mesh.position.x,o.mesh.position.y,o.mesh.position.z
-  );
- });
-
- if(t-lastSend>100){
-  socket.emit("update-user",{
-   roomId:ROOM,
-   x:player.position.x,
-   y:player.position.y,
-   z:player.position.z,
-   rot:player.rotation.y
-  });
-  lastSend=t;
- }
-
- renderer.render(scene,camera);
-}
-animate();
-
-/* ================== UTC ================== */
-setInterval(()=>document.getElementById("utc").textContent=
-"UTC "+new Date().toISOString().substr(11,8),1000);
-
-onresize=()=>{
- camera.aspect=innerWidth/innerHeight;
- camera.updateProjectionMatrix();
- renderer.setSize(innerWidth,innerHeight);
-};
-</script>
 </body>
 </html>
