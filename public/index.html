@@ -1,154 +1,205 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>HoloMeet VR PRO</title>
+<meta charset="UTF-8" />
+<title>HoloMeet VR</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<!-- A-FRAME -->
-<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-
-<!-- PHYSICS -->
-<script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@4.0.1/dist/aframe-physics-system.min.js"></script>
+<!-- THREE -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/PointerLockControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/loaders/GLTFLoader.js"></script>
 
 <!-- SOCKET -->
 <script src="/socket.io/socket.io.js"></script>
 
 <style>
-body { margin:0; overflow:hidden; }
+body { margin:0; overflow:hidden; background:#000; font-family:monospace }
+#hud {
+  position:fixed; top:10px; left:10px;
+  color:#00f3ff; border:1px solid #00f3ff;
+  padding:8px; background:rgba(0,0,0,.6)
+}
+#utc {
+  position:fixed; top:10px; right:10px;
+  color:#00f3ff; border:1px solid #00f3ff;
+  padding:8px; background:rgba(0,0,0,.6)
+}
+#controls {
+  position:fixed; bottom:10px; left:50%;
+  transform:translateX(-50%);
+}
+button {
+  background:#00f3ff; border:none;
+  padding:10px 14px; margin:4px;
+  font-weight:bold; cursor:pointer;
+}
 </style>
 </head>
 
 <body>
 
-<a-scene
-  vr-mode-ui="enabled: true"
-  physics="gravity:-9.8"
-  renderer="physicallyCorrectLights:true">
+<div id="hud">SESSION: <span id="room"></span></div>
+<div id="utc">UTC: --:--:--</div>
 
-  <!-- LUCES -->
-  <a-entity light="type: ambient; intensity:0.5"></a-entity>
-  <a-entity light="type: directional; intensity:1" position="5 10 5"></a-entity>
-
-  <!-- SALA -->
-  <a-entity
-    gltf-model="url(/Untitled.glb)"
-    static-body>
-  </a-entity>
-
-  <!-- 📺 TV / DASHBOARD -->
-  <a-plane
-    id="dashboard"
-    position="0 2 -5"
-    width="4"
-    height="2.5"
-    color="#111"
-    class="raycastable">
-  </a-plane>
-
-  <!-- 🪑 SILLAS (COLISIONES) -->
-  <a-entity id="chairs">
-    <a-box class="chair" data-index="0" position="0 0 -2" static-body></a-box>
-    <a-box class="chair" data-index="1" position="1 0 -2" static-body></a-box>
-    <a-box class="chair" data-index="2" position="-1 0 -2" static-body></a-box>
-    <a-box class="chair" data-index="3" position="0 0 -3" static-body></a-box>
-    <a-box class="chair" data-index="4" position="1 0 -3" static-body></a-box>
-    <a-box class="chair" data-index="5" position="-1 0 -3" static-body></a-box>
-    <a-box class="chair" data-index="6" position="0 0 -4" static-body></a-box>
-  </a-entity>
-
-  <!-- 👤 PLAYER -->
-  <a-entity id="rig" position="0 1.6 3" dynamic-body>
-
-    <!-- CÁMARA -->
-    <a-entity
-      id="camera"
-      camera
-      look-controls
-      wasd-controls="acceleration:20">
-    </a-entity>
-
-    <!-- AVATAR SIMPLE -->
-    <a-cylinder id="body" height="1.2" radius="0.25" color="#00f3ff" position="0 -0.6 0"></a-cylinder>
-
-    <!-- 🎤 AUDIO ESPACIAL -->
-    <a-sound
-      id="voice"
-      positional="true"
-      autoplay="true">
-    </a-sound>
-
-    <!-- 🖐️ MANO IZQUIERDA -->
-    <a-entity
-      hand-controls="hand:left"
-      raycaster="objects: .raycastable"
-      laser-controls="hand:left">
-    </a-entity>
-
-    <!-- 🖐️ MANO DERECHA + LÁSER -->
-    <a-entity
-      id="rightHand"
-      hand-controls="hand:right"
-      raycaster="objects: .raycastable"
-      laser-controls="hand:right">
-    </a-entity>
-
-  </a-entity>
-
-</a-scene>
+<div id="controls">
+<button onclick="uploadPDF()">SUBIR PDF</button>
+<button onclick="shareYT()">YOUTUBE</button>
+</div>
 
 <script>
-/* ================= SOCKET ================= */
+/* =======================
+   SESSION
+======================= */
+const params = new URLSearchParams(location.search);
+const ROOM = params.get("room") || "LOBBY";
+document.getElementById("room").textContent = ROOM;
+
+/* =======================
+   SOCKET
+======================= */
 const socket = io();
-const params = new URLSearchParams(window.location.search);
-const roomId = params.get('room') || 'default';
-const username = params.get('username') || 'Guest';
+socket.emit("join-room",{ roomId:ROOM, username:"Guest" });
 
-socket.emit('join-room', { roomId, username });
+/* =======================
+   THREE CORE
+======================= */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
 
-/* ================= AUDIO ESPACIAL REAL ================= */
-navigator.mediaDevices.getUserMedia({ audio:true }).then(stream => {
-  const audio = document.querySelector('#voice');
-  audio.components.sound.pool.children[0].srcObject = stream;
-});
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0,1.6,5);
 
-/* ================= SILLAS + ANIMACIÓN ================= */
-let seated = false;
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
 
-document.querySelectorAll('.chair').forEach(chair => {
-  chair.addEventListener('click', () => {
-    if (seated) return;
-    seated = true;
+/* =======================
+   LIGHTING
+======================= */
+scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.1));
+const dir = new THREE.DirectionalLight(0xffffff,0.8);
+dir.position.set(5,10,2);
+scene.add(dir);
 
-    document.querySelector('#camera').removeAttribute('wasd-controls');
-    document.querySelector('#body').setAttribute('scale', '1 0.6 1');
+/* =======================
+   CONTROLS
+======================= */
+const controls = new THREE.PointerLockControls(camera, document.body);
+document.body.onclick = () => controls.lock();
 
-    document.querySelector('#rig')
-      .setAttribute('position', chair.getAttribute('position'));
+const keys = {};
+onkeydown = e => keys[e.code]=true;
+onkeyup = e => keys[e.code]=false;
 
-    socket.emit('sit-chair', {
-      roomId,
-      chairIndex: chair.dataset.index
-    });
-  });
-});
+/* =======================
+   LOAD ROOM
+======================= */
+const loader = new THREE.GLTFLoader();
+const colliders = [];
+const chairs = {};
 
-window.addEventListener('keydown', e => {
-  if (e.key === ' ' && seated) {
-    seated = false;
-    document.querySelector('#camera')
-      .setAttribute('wasd-controls', 'acceleration:20');
-    document.querySelector('#body').setAttribute('scale', '1 1 1');
-  }
-});
+loader.load("./Untitled.glb", gltf=>{
+  gltf.scene.traverse(o=>{
+    if(o.isMesh){
+      o.castShadow = true;
+      o.receiveShadow = true;
 
-/* ================= LÁSER EN DASHBOARD ================= */
-document.querySelector('#rightHand')
-  .addEventListener('raycaster-intersection', e => {
-    const hit = e.detail.els[0];
-    if (hit && hit.id === 'dashboard') {
-      hit.setAttribute('color', '#333');
+      /* ---- CHAIRS (7) ---- */
+      if(o.name.startsWith("weaving3DAlanaOfficeChairFabricMesh001_chair")){
+        chairs[o.name] = o;
+        colliders.push(o);
+      }
+
+      /* ---- TABLE / WALLS ---- */
+      if(o.name.includes("Table") || o.name.includes("Wall")){
+        colliders.push(o);
+      }
+
+      /* ---- DASHBOARD ---- */
+      if(o.name==="pCube76_TV_0"){
+        tvMesh = o;
+      }
     }
   });
+  scene.add(gltf.scene);
+});
+
+/* =======================
+   TV SCREEN
+======================= */
+let tvMesh=null;
+const tvCanvas = document.createElement("canvas");
+tvCanvas.width=1024; tvCanvas.height=512;
+const tvCtx = tvCanvas.getContext("2d");
+const tvTex = new THREE.CanvasTexture(tvCanvas);
+
+function drawTV(text){
+  tvCtx.fillStyle="#003333";
+  tvCtx.fillRect(0,0,1024,512);
+  tvCtx.fillStyle="#00f3ff";
+  tvCtx.font="40px monospace";
+  tvCtx.fillText(text,50,100);
+  tvTex.needsUpdate=true;
+  if(tvMesh) tvMesh.material.map=tvTex;
+}
+drawTV("HOLOMEET READY");
+
+/* =======================
+   PDF / YOUTUBE
+======================= */
+function uploadPDF(){
+  const i=document.createElement("input");
+  i.type="file"; i.accept="application/pdf";
+  i.onchange=()=>{
+    drawTV("PDF CARGADO");
+    socket.emit("share-pdf",{roomId:ROOM});
+  };
+  i.click();
+}
+function shareYT(){
+  const url=prompt("YouTube URL");
+  if(url){ drawTV("VIDEO"); socket.emit("share-video",{roomId:ROOM,videoUrl:url}); }
+}
+
+/* =======================
+   COLLISION SIMPLE
+======================= */
+const ray = new THREE.Raycaster();
+function canMove(dir){
+  ray.set(camera.position, dir);
+  const hit = ray.intersectObjects(colliders,true);
+  return hit.length===0 || hit[0].distance>0.5;
+}
+
+/* =======================
+   LOOP
+======================= */
+function animate(){
+  requestAnimationFrame(animate);
+  const speed=0.05;
+  if(keys["KeyW"] && canMove(camera.getWorldDirection(new THREE.Vector3()))) controls.moveForward(speed);
+  if(keys["KeyS"]) controls.moveForward(-speed);
+  if(keys["KeyA"]) controls.moveRight(-speed);
+  if(keys["KeyD"]) controls.moveRight(speed);
+  renderer.render(scene,camera);
+}
+animate();
+
+/* =======================
+   UTC CLOCK
+======================= */
+setInterval(()=>{
+  document.getElementById("utc").textContent =
+    "UTC: "+new Date().toISOString().substr(11,8);
+},1000);
+
+onresize=()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+};
 </script>
 
 </body>
