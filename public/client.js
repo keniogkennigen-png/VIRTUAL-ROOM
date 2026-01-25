@@ -1,106 +1,105 @@
 const socket = io();
-const urlParams = new URLSearchParams(window.location.search);
-
-const roomId = urlParams.get('room') || 'default';
-const username = urlParams.get('username') || 'Guest';
+const params = new URLSearchParams(window.location.search);
+const roomId = params.get('room') || 'default';
+const username = params.get('username') || 'Guest';
 
 const rig = document.querySelector('#rig');
-const player = document.querySelector('#player');
+const screen = document.querySelector('#screen');
 
 let seated = false;
-let currentChair = null;
+let myChair = null;
+const lockedChairs = {};
+const avatars = {};
 
-/* -------------------------------
-   🚶 MOVIMIENTO + SINCRONIZACIÓN
---------------------------------*/
-setInterval(() => {
-  if (!seated) {
-    socket.emit('update-position', {
-      roomId,
-      position: rig.object3D.position
-    });
-  }
-}, 100);
+/* ---------------- JOIN ---------------- */
+socket.emit('join-room', { roomId, username });
 
-/* -------------------------------
-   🪑 SISTEMA DE SILLAS
---------------------------------*/
-document.querySelectorAll('.chair').forEach((chair, index) => {
+/* ---------------- SILLAS 100% SERVER ---------------- */
+document.querySelectorAll('.chair').forEach(chair => {
   chair.addEventListener('click', () => {
-    if (seated) return;
-
-    seated = true;
-    currentChair = index;
-
-    player.removeAttribute('wasd-controls');
-
-    rig.setAttribute('position', {
-      x: chair.object3D.position.x,
-      y: 0,
-      z: chair.object3D.position.z
-    });
+    const index = chair.dataset.index;
+    if (lockedChairs[index]) return;
 
     socket.emit('sit-chair', { roomId, chairIndex: index });
   });
 });
 
-/* -------------------------------
-   🧍 LEVANTARSE
---------------------------------*/
-window.addEventListener('keydown', e => {
-  if (e.key === ' ' && seated) {
-    seated = false;
-    currentChair = null;
-
-    player.setAttribute('wasd-controls', 'acceleration: 25');
-  }
-});
-
-/* -------------------------------
-   👥 OTROS USUARIOS
---------------------------------*/
-const avatars = {};
-
 socket.on('room-users', users => {
-  users.forEach(user => {
-    if (user.id === socket.id) return;
+  Object.keys(lockedChairs).forEach(k => delete lockedChairs[k]);
 
-    if (!avatars[user.id]) {
-      const avatar = document.createElement('a-box');
-      avatar.setAttribute('color', user.avatarColor || '#00f3ff');
-      avatar.setAttribute('height', user.chairIndex !== null ? 1 : 1.7);
-      avatar.setAttribute('width', 0.4);
-      avatar.setAttribute('depth', 0.4);
-      avatar.setAttribute('id', `avatar-${user.id}`);
-
-      document.querySelector('a-scene').appendChild(avatar);
-      avatars[user.id] = avatar;
+  users.forEach(u => {
+    if (u.chairIndex !== null) {
+      lockedChairs[u.chairIndex] = u.id;
     }
 
-    if (user.position) {
-      avatars[user.id].setAttribute('position', user.position);
+    if (u.id === socket.id && u.chairIndex !== null) {
+      seated = true;
+      myChair = u.chairIndex;
+      rig.setAttribute('position', document.querySelector(
+        `.chair[data-index="${u.chairIndex}"]`
+      ).getAttribute('position'));
+      document.querySelector('#camera').removeAttribute('wasd-controls');
     }
   });
 });
 
-/* -------------------------------
-   🧱 COLISIONES (NO ATRAVESAR)
---------------------------------*/
-AFRAME.registerComponent('collision-detector', {
-  tick() {
-    const pos = rig.object3D.position;
-    if (pos.x > 5) pos.x = 5;
-    if (pos.x < -5) pos.x = -5;
-    if (pos.z > 5) pos.z = 5;
-    if (pos.z < -5) pos.z = -5;
+/* ---------------- LEVANTARSE ---------------- */
+window.addEventListener('keydown', e => {
+  if (e.key === ' ' && seated) {
+    seated = false;
+    myChair = null;
+    document.querySelector('#camera')
+      .setAttribute('wasd-controls', 'acceleration:20');
   }
 });
 
-/* -------------------------------
-   🚪 CONEXIÓN
---------------------------------*/
-socket.emit('join-room', {
-  roomId,
-  username,
-  avatarColor: '#00f3ff'
+/* ---------------- AVATARES HUMANOS ---------------- */
+socket.on('user-joined', user => {
+  const avatar = document.createElement('a-entity');
+  avatar.setAttribute('gltf-model', 'url(/avatar.glb)');
+  avatar.setAttribute('scale', '1 1 1');
+  avatar.setAttribute('id', user.id);
+  document.querySelector('a-scene').appendChild(avatar);
+  avatars[user.id] = avatar;
 });
+
+socket.on('user-left', user => {
+  avatars[user.id]?.remove();
+});
+
+/* ---------------- PDF ---------------- */
+document.getElementById('pdfInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  const reader = new FileReader();
+  reader.onload = () => {
+    socket.emit('share-pdf', {
+      roomId,
+      pdfData: reader.result,
+      filename: file.name
+    });
+  };
+  reader.readAsDataURL(file);
+});
+
+socket.on('content-update', data => {
+  if (data.type === 'pdf') {
+    screen.setAttribute('material', {
+      src: data.data
+    });
+  }
+  if (data.type === 'video') {
+    screen.setAttribute('material', {
+      src: `https://www.youtube.com/embed/${extractYT(data.data)}`
+    });
+  }
+});
+
+/* ---------------- VIDEO ---------------- */
+function shareVideo() {
+  const url = document.getElementById('ytInput').value;
+  socket.emit('share-video', { roomId, videoUrl: url });
+}
+
+function extractYT(url) {
+  return url.split('v=')[1];
+}
