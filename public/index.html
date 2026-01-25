@@ -1,206 +1,160 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>HoloMeet VR</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<title>HoloMeet VR – Conference Room</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 
-<!-- THREE -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/controls/PointerLockControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/examples/js/loaders/GLTFLoader.js"></script>
-
-<!-- SOCKET -->
 <script src="/socket.io/socket.io.js"></script>
 
 <style>
-body { margin:0; overflow:hidden; background:#000; font-family:monospace }
-#hud {
-  position:fixed; top:10px; left:10px;
-  color:#00f3ff; border:1px solid #00f3ff;
-  padding:8px; background:rgba(0,0,0,.6)
-}
-#utc {
-  position:fixed; top:10px; right:10px;
-  color:#00f3ff; border:1px solid #00f3ff;
-  padding:8px; background:rgba(0,0,0,.6)
-}
-#controls {
-  position:fixed; bottom:10px; left:50%;
-  transform:translateX(-50%);
-}
-button {
-  background:#00f3ff; border:none;
-  padding:10px 14px; margin:4px;
-  font-weight:bold; cursor:pointer;
-}
+body{margin:0;overflow:hidden;background:#000;font-family:monospace}
+.hud{position:fixed;color:#00f3ff;border:1px solid #00f3ff;
+padding:6px;background:rgba(0,0,0,.6)}
+#session{top:10px;left:10px}
+#utc{top:10px;right:10px}
+#controls{bottom:10px;left:50%;transform:translateX(-50%);position:fixed}
+button{background:#00f3ff;border:none;padding:8px 12px;margin:4px;font-weight:bold}
 </style>
 </head>
 
 <body>
-
-<div id="hud">SESSION: <span id="room"></span></div>
-<div id="utc">UTC: --:--:--</div>
-
+<div id="session" class="hud">SESSION: <span id="room"></span></div>
+<div id="utc" class="hud">UTC: --:--:--</div>
 <div id="controls">
-<button onclick="uploadPDF()">SUBIR PDF</button>
-<button onclick="shareYT()">YOUTUBE</button>
+<button onclick="toggleSit()">SIT / STAND</button>
 </div>
 
 <script>
-/* =======================
-   SESSION
-======================= */
-const params = new URLSearchParams(location.search);
-const ROOM = params.get("room") || "LOBBY";
-document.getElementById("room").textContent = ROOM;
+/* ================= SESSION ================= */
+const params=new URLSearchParams(location.search);
+const ROOM=params.get("room")||"ROOM";
+document.getElementById("room").textContent=ROOM;
 
-/* =======================
-   SOCKET
-======================= */
-const socket = io();
-socket.emit("join-room",{ roomId:ROOM, username:"Guest" });
+/* ================= SOCKET ================= */
+const socket=io();
+socket.emit("join-room",{roomId:ROOM,username:"Guest"});
 
-/* =======================
-   THREE CORE
-======================= */
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+/* ================= THREE CORE ================= */
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x000000);
 
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 100);
+const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,0.1,100);
 camera.position.set(0,1.6,5);
 
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setSize(innerWidth, innerHeight);
-renderer.xr.enabled = true;
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+renderer.xr.enabled=true;
 document.body.appendChild(renderer.domElement);
 
-/* =======================
-   LIGHTING
-======================= */
-scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1.1));
-const dir = new THREE.DirectionalLight(0xffffff,0.8);
-dir.position.set(5,10,2);
-scene.add(dir);
+/* ================= LIGHT ================= */
+scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1));
+const dl=new THREE.DirectionalLight(0xffffff,.8);
+dl.position.set(5,10,2);scene.add(dl);
 
-/* =======================
-   CONTROLS
-======================= */
-const controls = new THREE.PointerLockControls(camera, document.body);
-document.body.onclick = () => controls.lock();
+/* ================= CONTROLS ================= */
+const controls=new THREE.PointerLockControls(camera,document.body);
+document.body.onclick=()=>controls.lock();
+const keys={};onkeydown=e=>keys[e.code]=true;onkeyup=e=>keys[e.code]=false;
 
-const keys = {};
-onkeydown = e => keys[e.code]=true;
-onkeyup = e => keys[e.code]=false;
+/* ================= PLAYER AVATAR ================= */
+const player=new THREE.Mesh(
+  new THREE.CapsuleGeometry(.25,1.1,4,8),
+  new THREE.MeshStandardMaterial({color:0x00f3ff})
+);
+player.position.set(0,1,5);
+scene.add(player);
 
-/* =======================
-   LOAD ROOM
-======================= */
-const loader = new THREE.GLTFLoader();
-const colliders = [];
-const chairs = {};
+/* ================= OTHERS ================= */
+const others={};
 
-loader.load("./Untitled.glb", gltf=>{
-  gltf.scene.traverse(o=>{
-    if(o.isMesh){
-      o.castShadow = true;
-      o.receiveShadow = true;
+/* ================= AUDIO SPATIAL ================= */
+const audioCtx=new AudioContext();
 
-      /* ---- CHAIRS (7) ---- */
-      if(o.name.startsWith("weaving3DAlanaOfficeChairFabricMesh001_chair")){
-        chairs[o.name] = o;
-        colliders.push(o);
-      }
+/* ================= ROOM LOAD ================= */
+const loader=new THREE.GLTFLoader();
+const colliders=[],chairs={};
+let tvMesh=null;
 
-      /* ---- TABLE / WALLS ---- */
-      if(o.name.includes("Table") || o.name.includes("Wall")){
-        colliders.push(o);
-      }
-
-      /* ---- DASHBOARD ---- */
-      if(o.name==="pCube76_TV_0"){
-        tvMesh = o;
-      }
-    }
-  });
-  scene.add(gltf.scene);
+loader.load("./Untitled.glb",g=>{
+ g.scene.traverse(o=>{
+  if(o.isMesh){
+   if(o.name.includes("chair")){
+    chairs[o.name]={mesh:o,occupied:false};
+    colliders.push(o);
+   }
+   if(o.name==="pCube76_TV_0")tvMesh=o;
+   if(o.name.includes("Table")||o.name.includes("Wall"))colliders.push(o);
+  }
+ });
+ scene.add(g.scene);
 });
 
-/* =======================
-   TV SCREEN
-======================= */
-let tvMesh=null;
-const tvCanvas = document.createElement("canvas");
-tvCanvas.width=1024; tvCanvas.height=512;
-const tvCtx = tvCanvas.getContext("2d");
-const tvTex = new THREE.CanvasTexture(tvCanvas);
+/* ================= LASER ================= */
+const laserMat=new THREE.LineBasicMaterial({color:0xff0000});
+const laserGeom=new THREE.BufferGeometry().setFromPoints([
+ new THREE.Vector3(),new THREE.Vector3(0,0,-5)
+]);
+const laser=new THREE.Line(laserGeom,laserMat);
+camera.add(laser);scene.add(camera);
 
-function drawTV(text){
-  tvCtx.fillStyle="#003333";
-  tvCtx.fillRect(0,0,1024,512);
-  tvCtx.fillStyle="#00f3ff";
-  tvCtx.font="40px monospace";
-  tvCtx.fillText(text,50,100);
-  tvTex.needsUpdate=true;
-  if(tvMesh) tvMesh.material.map=tvTex;
-}
-drawTV("HOLOMEET READY");
-
-/* =======================
-   PDF / YOUTUBE
-======================= */
-function uploadPDF(){
-  const i=document.createElement("input");
-  i.type="file"; i.accept="application/pdf";
-  i.onchange=()=>{
-    drawTV("PDF CARGADO");
-    socket.emit("share-pdf",{roomId:ROOM});
-  };
-  i.click();
-}
-function shareYT(){
-  const url=prompt("YouTube URL");
-  if(url){ drawTV("VIDEO"); socket.emit("share-video",{roomId:ROOM,videoUrl:url}); }
-}
-
-/* =======================
-   COLLISION SIMPLE
-======================= */
-const ray = new THREE.Raycaster();
+/* ================= COLLISION ================= */
+const ray=new THREE.Raycaster();
 function canMove(dir){
-  ray.set(camera.position, dir);
-  const hit = ray.intersectObjects(colliders,true);
-  return hit.length===0 || hit[0].distance>0.5;
+ ray.set(player.position,dir);
+ const h=ray.intersectObjects(colliders,true);
+ return !h.length||h[0].distance>.6;
 }
 
-/* =======================
-   LOOP
-======================= */
+/* ================= SIT / STAND ================= */
+let sitting=false;
+function toggleSit(){
+ sitting=!sitting;
+ player.position.y=sitting?.6:1;
+}
+
+/* ================= NETWORK SYNC ================= */
+socket.on("room-users",users=>{
+ users.forEach(u=>{
+  if(u.id===socket.id)return;
+  if(!others[u.id]){
+   const m=new THREE.Mesh(
+    new THREE.CapsuleGeometry(.25,1.1),
+    new THREE.MeshStandardMaterial({color:0xff00ff})
+   );
+   scene.add(m);others[u.id]=m;
+  }
+  others[u.id].position.set(u.x||0,1,u.z||0);
+ });
+});
+
+/* ================= LOOP ================= */
 function animate(){
-  requestAnimationFrame(animate);
-  const speed=0.05;
-  if(keys["KeyW"] && canMove(camera.getWorldDirection(new THREE.Vector3()))) controls.moveForward(speed);
-  if(keys["KeyS"]) controls.moveForward(-speed);
-  if(keys["KeyA"]) controls.moveRight(-speed);
-  if(keys["KeyD"]) controls.moveRight(speed);
-  renderer.render(scene,camera);
+ requestAnimationFrame(animate);
+ const speed=.05;
+ const dir=new THREE.Vector3();
+ camera.getWorldDirection(dir);
+ if(keys.KeyW&&canMove(dir))player.position.addScaledVector(dir,speed);
+ if(keys.KeyS)player.position.addScaledVector(dir,-speed);
+ if(keys.KeyA)player.position.x-=speed;
+ if(keys.KeyD)player.position.x+=speed;
+ camera.position.lerp(player.position.clone().add(new THREE.Vector3(0,1.6,0)),.3);
+ renderer.render(scene,camera);
 }
 animate();
 
-/* =======================
-   UTC CLOCK
-======================= */
-setInterval(()=>{
-  document.getElementById("utc").textContent =
-    "UTC: "+new Date().toISOString().substr(11,8);
-},1000);
+/* ================= UTC ================= */
+setInterval(()=>document.getElementById("utc").textContent=
+"UTC: "+new Date().toISOString().substr(11,8),1000);
 
 onresize=()=>{
-  camera.aspect=innerWidth/innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth,innerHeight);
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
 };
 </script>
-
 </body>
 </html>
