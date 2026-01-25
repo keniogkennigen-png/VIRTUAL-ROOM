@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>HoloMeet VR – Conference Room</title>
+<title>HoloMeet – Conference Room</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
@@ -14,31 +14,27 @@
 body{margin:0;overflow:hidden;background:#000;font-family:monospace}
 .hud{position:fixed;color:#00f3ff;border:1px solid #00f3ff;
 padding:6px;background:rgba(0,0,0,.6)}
-#session{top:10px;left:10px}
+#roomHud{top:10px;left:10px}
 #utc{top:10px;right:10px}
-#controls{bottom:10px;left:50%;transform:translateX(-50%);position:fixed}
-button{background:#00f3ff;border:none;padding:8px 12px;margin:4px;font-weight:bold}
+button{background:#00f3ff;border:none;padding:6px 10px;font-weight:bold}
 </style>
 </head>
 
 <body>
-<div id="session" class="hud">SESSION: <span id="room"></span></div>
-<div id="utc" class="hud">UTC: --:--:--</div>
-<div id="controls">
-<button onclick="toggleSit()">SIT / STAND</button>
-</div>
+<div id="roomHud" class="hud">ROOM: <span id="room"></span></div>
+<div id="utc" class="hud">UTC --:--</div>
 
 <script>
-/* ================= SESSION ================= */
+/* ================== SESSION ================== */
 const params=new URLSearchParams(location.search);
 const ROOM=params.get("room")||"ROOM";
 document.getElementById("room").textContent=ROOM;
 
-/* ================= SOCKET ================= */
+/* ================== SOCKET ================== */
 const socket=io();
 socket.emit("join-room",{roomId:ROOM,username:"Guest"});
 
-/* ================= THREE CORE ================= */
+/* ================== THREE ================== */
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x000000);
 
@@ -50,73 +46,61 @@ renderer.setSize(innerWidth,innerHeight);
 renderer.xr.enabled=true;
 document.body.appendChild(renderer.domElement);
 
-/* ================= LIGHT ================= */
+/* ================== LIGHT ================== */
 scene.add(new THREE.HemisphereLight(0xffffff,0x444444,1));
 const dl=new THREE.DirectionalLight(0xffffff,.8);
 dl.position.set(5,10,2);scene.add(dl);
 
-/* ================= CONTROLS ================= */
+/* ================== CONTROLS ================== */
 const controls=new THREE.PointerLockControls(camera,document.body);
 document.body.onclick=()=>controls.lock();
 const keys={};onkeydown=e=>keys[e.code]=true;onkeyup=e=>keys[e.code]=false;
 
-/* ================= PLAYER AVATAR ================= */
+/* ================== PLAYER ================== */
 const player=new THREE.Mesh(
-  new THREE.CapsuleGeometry(.25,1.1,4,8),
-  new THREE.MeshStandardMaterial({color:0x00f3ff})
+ new THREE.CapsuleGeometry(.25,1.1),
+ new THREE.MeshStandardMaterial({color:0x00f3ff})
 );
 player.position.set(0,1,5);
 scene.add(player);
 
-/* ================= OTHERS ================= */
+/* ================== OTHERS ================== */
 const others={};
 
-/* ================= AUDIO SPATIAL ================= */
+/* ================== AUDIO ================== */
 const audioCtx=new AudioContext();
+navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+ const src=audioCtx.createMediaStreamSource(stream);
+ socket.on("room-users",users=>{
+  users.forEach(u=>{
+   if(u.id===socket.id)return;
+   if(!others[u.id].audio){
+    const p=audioCtx.createPanner();
+    p.panningModel="HRTF";
+    p.distanceModel="inverse";
+    p.refDistance=1;
+    p.maxDistance=20;
+    src.connect(p).connect(audioCtx.destination);
+    others[u.id].audio=p;
+   }
+  });
+ });
+});
 
-/* ================= ROOM LOAD ================= */
+/* ================== ROOM ================== */
 const loader=new THREE.GLTFLoader();
-const colliders=[],chairs={};
-let tvMesh=null;
-
+const chairs={};
 loader.load("./Untitled.glb",g=>{
  g.scene.traverse(o=>{
-  if(o.isMesh){
-   if(o.name.includes("chair")){
-    chairs[o.name]={mesh:o,occupied:false};
-    colliders.push(o);
-   }
-   if(o.name==="pCube76_TV_0")tvMesh=o;
-   if(o.name.includes("Table")||o.name.includes("Wall"))colliders.push(o);
+  if(o.isMesh && o.name.includes("chair")){
+   chairs[o.name]={mesh:o,occupied:false};
   }
  });
  scene.add(g.scene);
 });
 
-/* ================= LASER ================= */
-const laserMat=new THREE.LineBasicMaterial({color:0xff0000});
-const laserGeom=new THREE.BufferGeometry().setFromPoints([
- new THREE.Vector3(),new THREE.Vector3(0,0,-5)
-]);
-const laser=new THREE.Line(laserGeom,laserMat);
-camera.add(laser);scene.add(camera);
-
-/* ================= COLLISION ================= */
-const ray=new THREE.Raycaster();
-function canMove(dir){
- ray.set(player.position,dir);
- const h=ray.intersectObjects(colliders,true);
- return !h.length||h[0].distance>.6;
-}
-
-/* ================= SIT / STAND ================= */
-let sitting=false;
-function toggleSit(){
- sitting=!sitting;
- player.position.y=sitting?.6:1;
-}
-
-/* ================= NETWORK SYNC ================= */
+/* ================== NETWORK ================== */
+let lastSend=0;
 socket.on("room-users",users=>{
  users.forEach(u=>{
   if(u.id===socket.id)return;
@@ -125,30 +109,57 @@ socket.on("room-users",users=>{
     new THREE.CapsuleGeometry(.25,1.1),
     new THREE.MeshStandardMaterial({color:0xff00ff})
    );
-   scene.add(m);others[u.id]=m;
+   scene.add(m);
+   others[u.id]={mesh:m,pos:new THREE.Vector3()};
   }
-  others[u.id].position.set(u.x||0,1,u.z||0);
+  others[u.id].pos.set(u.x||0,u.sitting?.6:1,u.z||0);
+  others[u.id].rot=u.rot||0;
+  others[u.id].mesh.material.emissive.set(u.isSpeaking?0x00ff00:0x000000);
  });
 });
 
-/* ================= LOOP ================= */
-function animate(){
+/* ================== LOOP ================== */
+function animate(t){
  requestAnimationFrame(animate);
+
  const speed=.05;
  const dir=new THREE.Vector3();
  camera.getWorldDirection(dir);
- if(keys.KeyW&&canMove(dir))player.position.addScaledVector(dir,speed);
+
+ if(keys.KeyW)player.position.addScaledVector(dir,speed);
  if(keys.KeyS)player.position.addScaledVector(dir,-speed);
  if(keys.KeyA)player.position.x-=speed;
  if(keys.KeyD)player.position.x+=speed;
+
  camera.position.lerp(player.position.clone().add(new THREE.Vector3(0,1.6,0)),.3);
+ camera.rotation.y=player.rotation.y;
+
+ Object.values(others).forEach(o=>{
+  o.mesh.position.lerp(o.pos,.15);
+  o.mesh.rotation.y+=((o.rot||0)-o.mesh.rotation.y)*.15;
+  if(o.audio)o.audio.setPosition(
+   o.mesh.position.x,o.mesh.position.y,o.mesh.position.z
+  );
+ });
+
+ if(t-lastSend>100){
+  socket.emit("update-user",{
+   roomId:ROOM,
+   x:player.position.x,
+   y:player.position.y,
+   z:player.position.z,
+   rot:player.rotation.y
+  });
+  lastSend=t;
+ }
+
  renderer.render(scene,camera);
 }
 animate();
 
-/* ================= UTC ================= */
+/* ================== UTC ================== */
 setInterval(()=>document.getElementById("utc").textContent=
-"UTC: "+new Date().toISOString().substr(11,8),1000);
+"UTC "+new Date().toISOString().substr(11,8),1000);
 
 onresize=()=>{
  camera.aspect=innerWidth/innerHeight;
