@@ -145,6 +145,15 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('presenter-changed', targetId);
   });
 
+  // 🪑 CHAIR SYNCHRONIZATION
+  socket.on('chair-occupied', ({ roomId, chairName, by }) => {
+    socket.broadcast.to(roomId).emit('chair-occupied', { chairName, by });
+  });
+
+  socket.on('chair-freed', ({ roomId, chairName }) => {
+    socket.broadcast.to(roomId).emit('chair-freed', { chairName });
+  });
+
   // Sit in chair
   socket.on('sit-chair', ({ roomId, chairIndex }) => {
     if (rooms[roomId]) {

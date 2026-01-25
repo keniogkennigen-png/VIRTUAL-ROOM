@@ -676,6 +676,8 @@
         let clock = new THREE.Clock();
         let raycaster, mouse;
         let isSitting = false;
+        let currentChair = null;
+        let chairs = []; // Array to track all chairs
 
         // Admin variables
         let isAdmin = false;
@@ -763,6 +765,9 @@
             // Window resize handler
             window.addEventListener('resize', onWindowResize);
 
+            // Mouse move for cursor feedback
+            window.addEventListener('mousemove', onMouseMove);
+
             // Click handler for chairs
             window.addEventListener('click', onMouseClick);
 
@@ -778,14 +783,14 @@
         // Create chairs in the room
         function createChairs() {
             const chairPositions = [
-                { x: 0, z: 0 },
-                { x: -2, z: 0 },
-                { x: 2, z: 0 },
-                { x: -1, z: -2 },
-                { x: 1, z: -2 },
-                { x: 0, z: -4 },
-                { x: -3, z: -3 },
-                { x: 3, z: -3 }
+                { x: 0, z: 0, name: 'Chair_0' },
+                { x: -2, z: 0, name: 'Chair_1' },
+                { x: 2, z: 0, name: 'Chair_2' },
+                { x: -1, z: -2, name: 'Chair_3' },
+                { x: 1, z: -2, name: 'Chair_4' },
+                { x: 0, z: -4, name: 'Chair_5' },
+                { x: -3, z: -3, name: 'Chair_6' },
+                { x: 3, z: -3, name: 'Chair_7' }
             ];
 
             chairPositions.forEach((pos, index) => {
@@ -829,9 +834,26 @@
                 });
 
                 chairGroup.position.set(pos.x, 0, pos.z);
+                chairGroup.name = pos.name;
                 chairGroup.userData.isChair = true;
+                chairGroup.userData.occupied = false;
+                chairGroup.userData.by = null;
                 chairGroup.userData.chairIndex = index;
+
+                chairs.push(chairGroup);
                 scene.add(chairGroup);
+            });
+        }
+
+        // Mark chairs from GLB model (if loading real office model)
+        function markChairsFromModel(room) {
+            room.traverse(obj => {
+                if (obj.name.includes('Chair') || obj.name.includes('AlanaOfficeChair')) {
+                    obj.userData.isChair = true;
+                    obj.userData.occupied = false;
+                    obj.userData.by = null;
+                    chairs.push(obj);
+                }
             });
         }
 
@@ -908,7 +930,22 @@
 
         // Sit on chair
         window.sitOnChair = function(chair) {
-            if (isSitting) return;
+            // Check if chair is already occupied
+            if (chair.userData.occupied) {
+                alert('❌ Esta silla está ocupada');
+                return;
+            }
+
+            // Free previous chair if exists
+            if (currentChair) {
+                currentChair.userData.occupied = false;
+                currentChair.userData.by = null;
+            }
+
+            // Block new chair
+            chair.userData.occupied = true;
+            chair.userData.by = socket.id;
+            currentChair = chair;
 
             isSitting = true;
 
@@ -920,6 +957,13 @@
 
             playAnimation('sit');
 
+            // Notify others
+            socket.emit('chair-occupied', {
+                roomId,
+                chairName: chair.name,
+                by: socket.id
+            });
+
             // Show stand up button
             document.getElementById('standBtn').classList.add('visible');
 
@@ -929,9 +973,19 @@
 
         // Stand up
         window.standUp = function() {
-            if (!isSitting) return;
+            if (!isSitting || !currentChair) return;
 
             isSitting = false;
+
+            // Free the chair
+            currentChair.userData.occupied = false;
+            currentChair.userData.by = null;
+
+            // Notify others
+            socket.emit('chair-freed', {
+                roomId,
+                chairName: currentChair.name
+            });
 
             avatar.position.y += 0.2;
 
@@ -940,9 +994,33 @@
             // Hide stand up button
             document.getElementById('standBtn').classList.remove('visible');
 
+            currentChair = null;
+
             // Notify server
             socket.emit('sit-chair', { roomId, chairIndex: null });
         };
+
+        // Mouse move handler for cursor feedback
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            let cursor = 'default';
+            for (let hit of intersects) {
+                let obj = hit.object;
+                while (obj.parent && !obj.userData.isChair) {
+                    obj = obj.parent;
+                }
+                if (obj.userData.isChair) {
+                    cursor = obj.userData.occupied ? 'not-allowed' : 'pointer';
+                    break;
+                }
+            }
+            document.body.style.cursor = cursor;
+        }
 
         // Mouse click handler for chair interaction
         function onMouseClick(event) {
@@ -1053,6 +1131,37 @@
         socket.on('presenter-changed', (id) => {
             presenterId = id;
             showNotification(`🎤 Presenter changed`);
+        });
+
+        // 🪑 CHAIR SYNCHRONIZATION
+        socket.on('chair-occupied', (data) => {
+            const chair = chairs.find(c => c.name === data.chairName);
+            if (!chair) return;
+
+            chair.userData.occupied = true;
+            chair.userData.by = data.by;
+
+            // Visual feedback - red glow for occupied
+            chair.traverse(obj => {
+                if (obj.isMesh && obj.material) {
+                    obj.material.emissive?.setHex(0xff0000);
+                }
+            });
+        });
+
+        socket.on('chair-freed', (data) => {
+            const chair = chairs.find(c => c.name === data.chairName);
+            if (!chair) return;
+
+            chair.userData.occupied = false;
+            chair.userData.by = null;
+
+            // Remove red glow
+            chair.traverse(obj => {
+                if (obj.isMesh && obj.material) {
+                    obj.material.emissive?.setHex(0x000000);
+                }
+            });
         });
 
         // Admin actions
