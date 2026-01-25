@@ -1,0 +1,1237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HoloMeet VR - Holographic Conference Room</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Holographic UI Overlay */
+        .ui-overlay {
+            position: fixed;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        .ui-overlay > * {
+            pointer-events: auto;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(180deg, rgba(5,5,16,0.95) 0%, rgba(5,5,16,0) 100%);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 30px;
+        }
+
+        .room-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .room-id {
+            color: #00F3FF;
+            font-size: 14px;
+            background: rgba(0,243,255,0.1);
+            border: 1px solid rgba(0,243,255,0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .room-id:hover {
+            background: rgba(0,243,255,0.2);
+            box-shadow: 0 0 20px rgba(0,243,255,0.4);
+        }
+
+        .participant-count {
+            color: #fff;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .participant-count::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #00FF88;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Control Panel */
+        .control-panel {
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            padding: 15px 25px;
+            background: rgba(5,5,16,0.9);
+            border: 1px solid rgba(0,243,255,0.2);
+            border-radius: 50px;
+            backdrop-filter: blur(20px);
+        }
+
+        .control-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .control-btn.active {
+            background: rgba(0,243,255,0.2);
+            border-color: #00F3FF;
+            box-shadow: 0 0 20px rgba(0,243,255,0.3);
+        }
+
+        .control-btn.muted {
+            background: rgba(255,50,50,0.2);
+            border-color: #FF3232;
+        }
+
+        .control-btn svg {
+            width: 24px;
+            height: 24px;
+            fill: #fff;
+        }
+
+        .control-btn.active svg {
+            fill: #00F3FF;
+        }
+
+        .control-btn.muted svg {
+            fill: #FF3232;
+        }
+
+        .control-btn.speaking svg {
+            fill: #00FF88;
+            filter: drop-shadow(0 0 10px #00FF88);
+        }
+
+        /* Admin Panel */
+        #adminPanel {
+            position: fixed;
+            top: 140px;
+            right: 10px;
+            z-index: 20;
+            background: #111;
+            color: #fff;
+            padding: 10px;
+            display: none;
+            border-radius: 10px;
+            min-width: 200px;
+        }
+
+        #adminPanel.visible {
+            display: block;
+        }
+
+        #adminPanel b {
+            display: block;
+            margin-bottom: 10px;
+            color: #00F3FF;
+            font-size: 14px;
+        }
+
+        #adminPanel #userList {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        #adminPanel #userList > div {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px;
+            margin: 2px 0;
+            background: rgba(255,255,255,0.05);
+            border-radius: 5px;
+        }
+
+        #adminPanel button {
+            padding: 4px 8px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        #adminPanel button:hover {
+            transform: scale(1.1);
+        }
+
+        /* Stand Up Button */
+        #standBtn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10;
+            padding: 12px 24px;
+            background: rgba(0,243,255,0.2);
+            border: 1px solid #00F3FF;
+            color: #00F3FF;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            display: none;
+        }
+
+        #standBtn.visible {
+            display: block;
+        }
+
+        #standBtn:hover {
+            background: rgba(0,243,255,0.4);
+            box-shadow: 0 0 20px rgba(0,243,255,0.4);
+        }
+
+        /* Right Panel - Dashboard Controls */
+        .dashboard-panel {
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            width: 280px;
+            padding: 20px;
+            background: rgba(5,5,16,0.9);
+            border: 1px solid rgba(112,0,255,0.3);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+        }
+
+        .panel-title {
+            color: #fff;
+            font-size: 16px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-title svg {
+            width: 20px;
+            height: 20px;
+            fill: #7000FF;
+        }
+
+        /* Input styling */
+        input[type="text"], input[type="url"] {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 14px;
+            margin-bottom: 10px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus, input[type="url"]:focus {
+            border-color: #7000FF;
+            box-shadow: 0 0 20px rgba(112,0,255,0.2);
+        }
+
+        /* Button styling */
+        .dashboard-btn {
+            width: 100%;
+            padding: 12px 20px;
+            background: linear-gradient(135deg, rgba(112,0,255,0.2) 0%, rgba(0,243,255,0.2) 100%);
+            border: 1px solid rgba(112,0,255,0.3);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .dashboard-btn:hover {
+            background: linear-gradient(135deg, rgba(112,0,255,0.4) 0%, rgba(0,243,255,0.4) 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(112,0,255,0.3);
+        }
+
+        .dashboard-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: #fff;
+        }
+
+        /* Chat Panel */
+        .chat-panel {
+            top: 80px;
+            left: 20px;
+            width: 320px;
+            height: 400px;
+            background: rgba(5,5,16,0.9);
+            border: 1px solid rgba(0,243,255,0.2);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+
+        .chat-message {
+            margin-bottom: 12px;
+            padding: 10px 15px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            border-left: 3px solid #00F3FF;
+        }
+
+        .chat-message.system {
+            border-left-color: #7000FF;
+            background: rgba(112,0,255,0.1);
+        }
+
+        .chat-message .sender {
+            color: #00F3FF;
+            font-size: 12px;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .chat-message .time {
+            color: rgba(255,255,255,0.4);
+            font-size: 10px;
+            float: right;
+        }
+
+        .chat-message .text {
+            color: #fff;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .chat-input-container {
+            padding: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input-container input {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .chat-input-container button {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #00F3FF 0%, #00FF88 100%);
+            border: none;
+            border-radius: 12px;
+            color: #000;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .chat-input-container button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(0,243,255,0.4);
+        }
+
+        /* UTC Clock */
+        .utc-clock {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.6);
+            font-size: 12px;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 2px;
+            z-index: 50;
+        }
+
+        /* Dashboard Display */
+        .dashboard-display {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            height: 60%;
+            background: rgba(0,0,0,0.9);
+            border: 1px solid rgba(112,0,255,0.3);
+            border-radius: 20px;
+            z-index: 90;
+            display: none;
+            overflow: hidden;
+        }
+
+        .dashboard-display.active {
+            display: block;
+        }
+
+        .dashboard-display iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .dashboard-display .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255,50,50,0.2);
+            border: 1px solid #FF3232;
+            border-radius: 50%;
+            color: #FF3232;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.3s ease;
+        }
+
+        .dashboard-display .close-btn:hover {
+            background: rgba(255,50,50,0.4);
+        }
+
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #050510;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(0,243,255,0.2);
+            border-top-color: #00F3FF;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: #00F3FF;
+            font-size: 14px;
+            margin-top: 20px;
+            letter-spacing: 2px;
+        }
+
+        /* Notification */
+        .notification {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            padding: 15px 30px;
+            background: rgba(5,5,16,0.95);
+            border: 1px solid #00F3FF;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 14px;
+            z-index: 200;
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .notification.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .notification.error {
+            border-color: #FF3232;
+            color: #FF3232;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">INITIALIZING VR ENVIRONMENT</div>
+    </div>
+
+    <!-- UTC Clock -->
+    <div class="utc-clock" id="utcClock">00:00:00 UTC</div>
+
+    <!-- Top Bar -->
+    <div class="ui-overlay top-bar">
+        <div class="room-info">
+            <div class="room-id" id="roomIdDisplay" title="Click to copy">
+                <span id="roomIdText">ROOM</span>
+                <svg class="copy-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                </svg>
+            </div>
+            <div class="participant-count">
+                <span id="participantCount">0</span> participants
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="adminPanel">
+        <b>ADMIN</b>
+        <div id="userList"></div>
+        <button onclick="lockRoom()">🔒 Lock room</button>
+    </div>
+
+    <!-- Stand Up Button -->
+    <button id="standBtn" onclick="standUp()">Stand up</button>
+
+    <!-- Control Panel -->
+    <div class="ui-overlay control-panel">
+        <button class="control-btn" id="micBtn" title="Microphone (PTT: Space)">
+            <svg viewBox="0 0 24 24">
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+        </button>
+        <button class="control-btn" id="cameraBtn" title="Camera">
+            <svg viewBox="0 0 24 24">
+                <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+            </svg>
+        </button>
+        <button class="control-btn" id="screenBtn" title="Share Screen">
+            <svg viewBox="0 0 24 24">
+                <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
+            </svg>
+        </button>
+        <button class="control-btn" id="chatBtn" title="Chat">
+            <svg viewBox="0 0 24 24">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+            </svg>
+        </button>
+        <button class="control-btn" id="settingsBtn" title="Settings">
+            <svg viewBox="0 0 24 24">
+                <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Push-to-Talk Indicator -->
+    <div class="ptt-indicator" id="pttIndicator">PUSH TO TALK ACTIVE</div>
+
+    <!-- Dashboard Panel -->
+    <div class="ui-overlay dashboard-panel">
+        <div class="panel-title">
+            <svg viewBox="0 0 24 24">
+                <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9h-4v4h-2v-4H9V9h4V5h2v4h4v2z"/>
+            </svg>
+            Dashboard
+        </div>
+        <input type="text" id="pdfUrl" placeholder="Enter PDF URL...">
+        <button class="dashboard-btn" onclick="sharePdf()">
+            <svg viewBox="0 0 24 24">
+                <path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/>
+            </svg>
+            Share PDF
+        </button>
+        <input type="url" id="videoUrl" placeholder="Enter YouTube URL..." style="margin-top: 15px;">
+        <button class="dashboard-btn" onclick="shareVideo()">
+            <svg viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+            </svg>
+            Share Video
+        </button>
+        <button class="dashboard-btn" onclick="clearContent()" style="background: rgba(255,50,50,0.2); border-color: rgba(255,50,50,0.3);">
+            <svg viewBox="0 0 24 24">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+            </svg>
+            Clear Content
+        </button>
+    </div>
+
+    <!-- Chat Panel -->
+    <div class="ui-overlay chat-panel" id="chatPanel" style="display: none;">
+        <div class="chat-header">Chat</div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-input-container">
+            <input type="text" id="chatInput" placeholder="Type a message...">
+            <button onclick="sendChatMessage()">Send</button>
+        </div>
+    </div>
+
+    <!-- Dashboard Display -->
+    <div class="dashboard-display" id="dashboardDisplay">
+        <button class="close-btn" onclick="closeDashboard()">×</button>
+        <iframe id="dashboardIframe" src=""></iframe>
+    </div>
+
+    <!-- Notification -->
+    <div class="notification" id="notification"></div>
+
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script type="module">
+        // Get room and username from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('room') || 'default-room';
+        const username = urlParams.get('username') || 'Guest';
+        const userId = Math.random().toString(36).substr(2, 9);
+
+        // Update UI with room info
+        document.getElementById('roomIdText').textContent = roomId;
+        document.getElementById('roomIdDisplay').title = `Room: ${roomId}`;
+
+        // Socket connection
+        const socket = io();
+
+        // Three.js variables
+        let scene, camera, renderer, controls;
+        let avatar, mixer, actions = {}, currentAction;
+        let clock = new THREE.Clock();
+        let raycaster, mouse;
+        let isSitting = false;
+
+        // Admin variables
+        let isAdmin = false;
+        let presenterId = null;
+        let users = [];
+
+        // Control states
+        let isMicOn = false;
+        let isCameraOn = true;
+        let isScreenSharing = false;
+
+        // Initialize Three.js scene
+        function initThreeJS() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x050510);
+            scene.fog = new THREE.Fog(0x050510, 10, 50);
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 2, 5);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 1;
+            controls.maxDistance = 20;
+            controls.maxPolarAngle = Math.PI / 2;
+
+            // Raycaster for chair interaction
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 10, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+
+            const pointLight1 = new THREE.PointLight(0x00F3FF, 1, 20);
+            pointLight1.position.set(-5, 3, -5);
+            scene.add(pointLight1);
+
+            const pointLight2 = new THREE.PointLight(0x7000FF, 1, 20);
+            pointLight2.position.set(5, 3, 5);
+            scene.add(pointLight2);
+
+            // Create floor
+            const floorGeometry = new THREE.PlaneGeometry(30, 30);
+            const floorMaterial = new THREE.MeshStandardMaterial({
+                color: 0x1a1a2e,
+                roughness: 0.8,
+                metalness: 0.2
+            });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // Create grid
+            const gridHelper = new THREE.GridHelper(30, 30, 0x00F3FF, 0x333355);
+            gridHelper.position.y = 0.01;
+            scene.add(gridHelper);
+
+            // Create chairs
+            createChairs();
+
+            // Load avatar
+            loadAvatar();
+
+            // Window resize handler
+            window.addEventListener('resize', onWindowResize);
+
+            // Click handler for chairs
+            window.addEventListener('click', onMouseClick);
+
+            // Start animation loop
+            animate();
+
+            // Hide loading overlay
+            setTimeout(() => {
+                document.getElementById('loadingOverlay').classList.add('hidden');
+            }, 1500);
+        }
+
+        // Create chairs in the room
+        function createChairs() {
+            const chairPositions = [
+                { x: 0, z: 0 },
+                { x: -2, z: 0 },
+                { x: 2, z: 0 },
+                { x: -1, z: -2 },
+                { x: 1, z: -2 },
+                { x: 0, z: -4 },
+                { x: -3, z: -3 },
+                { x: 3, z: -3 }
+            ];
+
+            chairPositions.forEach((pos, index) => {
+                const chairGroup = new THREE.Group();
+
+                // Chair seat
+                const seatGeometry = new THREE.BoxGeometry(0.5, 0.1, 0.5);
+                const seatMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x7000FF,
+                    roughness: 0.5,
+                    metalness: 0.5
+                });
+                const seat = new THREE.Mesh(seatGeometry, seatMaterial);
+                seat.position.y = 0.5;
+                seat.castShadow = true;
+                chairGroup.add(seat);
+
+                // Chair back
+                const backGeometry = new THREE.BoxGeometry(0.5, 0.6, 0.1);
+                const back = new THREE.Mesh(backGeometry, seatMaterial);
+                back.position.set(0, 0.8, -0.2);
+                back.castShadow = true;
+                chairGroup.add(back);
+
+                // Chair legs
+                const legGeometry = new THREE.CylinderGeometry(0.03, 0.03, 0.5);
+                const legMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+
+                const legPositions = [
+                    { x: -0.2, z: -0.2 },
+                    { x: 0.2, z: -0.2 },
+                    { x: -0.2, z: 0.2 },
+                    { x: 0.2, z: 0.2 }
+                ];
+
+                legPositions.forEach(legPos => {
+                    const leg = new THREE.Mesh(legGeometry, legMaterial);
+                    leg.position.set(legPos.x, 0.25, legPos.z);
+                    leg.castShadow = true;
+                    chairGroup.add(leg);
+                });
+
+                chairGroup.position.set(pos.x, 0, pos.z);
+                chairGroup.userData.isChair = true;
+                chairGroup.userData.chairIndex = index;
+                scene.add(chairGroup);
+            });
+        }
+
+        // Load avatar with animations
+        function loadAvatar() {
+            // Create a simple avatar for now
+            const avatarGroup = new THREE.Group();
+
+            // Head
+            const headGeometry = new THREE.SphereGeometry(0.15, 16, 16);
+            const headMaterial = new THREE.MeshStandardMaterial({ color: 0x00F3FF });
+            const head = new THREE.Mesh(headGeometry, headMaterial);
+            head.position.y = 1.6;
+            avatarGroup.add(head);
+
+            // Body
+            const bodyGeometry = new THREE.CylinderGeometry(0.15, 0.2, 0.6, 8);
+            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 1.1;
+            body.castShadow = true;
+            avatarGroup.add(body);
+
+            // Arms
+            const armGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.5, 8);
+            const leftArm = new THREE.Mesh(armGeometry, bodyMaterial);
+            leftArm.position.set(-0.25, 1.2, 0);
+            leftArm.rotation.z = 0.3;
+            avatarGroup.add(leftArm);
+
+            const rightArm = new THREE.Mesh(armGeometry, bodyMaterial);
+            rightArm.position.set(0.25, 1.2, 0);
+            rightArm.rotation.z = -0.3;
+            avatarGroup.add(rightArm);
+
+            avatar = avatarGroup;
+            scene.add(avatar);
+
+            // Initialize animation mixer (for future GLB animations)
+            mixer = new THREE.AnimationMixer(avatar);
+
+            // Create idle animation
+            createIdleAnimation();
+
+            // Play initial animation
+            playAnimation('idle');
+        }
+
+        // Create idle animation
+        function createIdleAnimation() {
+            // Simple breathing animation
+            const times = [0, 1, 2];
+            const values = [0, 0.02, 0];
+
+            const positionKF = new THREE.VectorKeyframeTrack('.position', times, values);
+
+            const clip = new THREE.AnimationClip('idle', 2, [positionKF]);
+            actions['idle'] = mixer.clipAction(clip);
+            actions['idle'].play();
+            currentAction = actions['idle'];
+        }
+
+        // Play animation
+        window.playAnimation = function(name) {
+            if (!actions[name]) return;
+
+            if (currentAction) {
+                currentAction.fadeOut(0.2);
+            }
+
+            currentAction = actions[name];
+            currentAction.reset().fadeIn(0.2).play();
+        };
+
+        // Sit on chair
+        window.sitOnChair = function(chair) {
+            if (isSitting) return;
+
+            isSitting = true;
+
+            const seatPos = new THREE.Vector3();
+            chair.getWorldPosition(seatPos);
+
+            avatar.position.copy(seatPos);
+            avatar.position.y += 0.05;
+
+            playAnimation('sit');
+
+            // Show stand up button
+            document.getElementById('standBtn').classList.add('visible');
+
+            // Notify server
+            socket.emit('sit-chair', { roomId, chairIndex: chair.userData.chairIndex });
+        };
+
+        // Stand up
+        window.standUp = function() {
+            if (!isSitting) return;
+
+            isSitting = false;
+
+            avatar.position.y += 0.2;
+
+            playAnimation('idle');
+
+            // Hide stand up button
+            document.getElementById('standBtn').classList.remove('visible');
+
+            // Notify server
+            socket.emit('sit-chair', { roomId, chairIndex: null });
+        };
+
+        // Mouse click handler for chair interaction
+        function onMouseClick(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            for (let hit of intersects) {
+                let obj = hit.object;
+                while (obj.parent && !obj.userData.isChair) {
+                    obj = obj.parent;
+                }
+                if (obj.userData.isChair) {
+                    sitOnChair(obj);
+                    break;
+                }
+            }
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+            if (mixer) mixer.update(delta);
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Window resize handler
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Socket event handlers
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            socket.emit('join-room', { roomId, username, avatarColor: '#00F3FF' });
+        });
+
+        // Admin info
+        socket.on('admin-info', (data) => {
+            isAdmin = data.isAdmin;
+            presenterId = data.presenter;
+
+            if (isAdmin) {
+                showAdminPanel();
+            }
+        });
+
+        // Show admin panel
+        window.showAdminPanel = function() {
+            document.getElementById('adminPanel').classList.add('visible');
+        };
+
+        // User list
+        socket.on('user-list', (userList) => {
+            users = userList;
+
+            const userListEl = document.getElementById('userList');
+            userListEl.innerHTML = '';
+
+            users.forEach(id => {
+                if (id === userId) return;
+
+                const div = document.createElement('div');
+                div.innerHTML = `
+                    ${id.slice(0, 6)}
+                    <button onclick="muteUser('${id}')">🔇</button>
+                    <button onclick="kickUser('${id}')">👢</button>
+                    <button onclick="setPresenter('${id}')">🎤</button>
+                `;
+                userListEl.appendChild(div);
+            });
+        });
+
+        // Room users
+        socket.on('room-users', (userArray) => {
+            const count = userArray.length;
+            document.getElementById('participantCount').textContent = count;
+        });
+
+        // Force mute
+        socket.on('force-mute', () => {
+            console.log('🔇 Muted by admin');
+            isMicOn = false;
+            updateMicButton();
+            showNotification('You have been muted by the admin');
+        });
+
+        // Force kick
+        socket.on('force-kick', () => {
+            alert('You were removed by admin');
+            window.location.href = '/';
+        });
+
+        // Room locked
+        socket.on('room-locked', () => {
+            showNotification('🔒 Room is locked');
+        });
+
+        // Presenter changed
+        socket.on('presenter-changed', (id) => {
+            presenterId = id;
+            showNotification(`🎤 Presenter changed`);
+        });
+
+        // Admin actions
+        window.muteUser = function(id) {
+            socket.emit('mute-user', { roomId, targetId: id });
+        };
+
+        window.kickUser = function(id) {
+            socket.emit('kick-user', { roomId, targetId: id });
+        };
+
+        window.setPresenter = function(id) {
+            socket.emit('set-presenter', { roomId, targetId: id });
+        };
+
+        window.lockRoom = function() {
+            socket.emit('lock-room', { roomId });
+        };
+
+        // Chat message received
+        socket.on('new-message', (message) => {
+            addChatMessage(message);
+        });
+
+        // Dashboard content update
+        socket.on('content-update', (dashboard) => {
+            if (dashboard.type === 'pdf' || dashboard.type === 'video') {
+                openDashboard(dashboard);
+            }
+        });
+
+        // Control button handlers
+        document.getElementById('micBtn').addEventListener('click', () => {
+            isMicOn = !isMicOn;
+            updateMicButton();
+            socket.emit(isMicOn ? 'start-speaking' : 'stop-speaking', { roomId });
+        });
+
+        document.getElementById('cameraBtn').addEventListener('click', () => {
+            isCameraOn = !isCameraOn;
+            document.getElementById('cameraBtn').classList.toggle('active', isCameraOn);
+        });
+
+        document.getElementById('screenBtn').addEventListener('click', () => {
+            isScreenSharing = !isScreenSharing;
+            document.getElementById('screenBtn').classList.toggle('active', isScreenSharing);
+        });
+
+        document.getElementById('chatBtn').addEventListener('click', () => {
+            const chatPanel = document.getElementById('chatPanel');
+            chatPanel.style.display = chatPanel.style.display === 'none' ? 'flex' : 'none';
+        });
+
+        // Update mic button
+        function updateMicButton() {
+            const micBtn = document.getElementById('micBtn');
+            micBtn.classList.toggle('active', isMicOn);
+            micBtn.classList.toggle('muted', !isMicOn);
+
+            const pttIndicator = document.getElementById('pttIndicator');
+            pttIndicator.classList.toggle('active', isMicOn);
+        }
+
+        // Push to talk (Space key)
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !isMicOn) {
+                e.preventDefault();
+                isMicOn = true;
+                updateMicButton();
+                socket.emit('start-speaking', { roomId });
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'Space' && isMicOn) {
+                e.preventDefault();
+                isMicOn = false;
+                updateMicButton();
+                socket.emit('stop-speaking', { roomId });
+            }
+        });
+
+        // Share PDF
+        window.sharePdf = function() {
+            const pdfUrl = document.getElementById('pdfUrl').value;
+            if (pdfUrl) {
+                socket.emit('share-pdf', { roomId, pdfData: pdfUrl, filename: pdfUrl.split('/').pop() });
+            }
+        };
+
+        // Share video
+        window.shareVideo = function() {
+            const videoUrl = document.getElementById('videoUrl').value;
+            if (videoUrl) {
+                socket.emit('share-video', { roomId, videoUrl, title: 'Shared Video' });
+            }
+        };
+
+        // Clear content
+        window.clearContent = function() {
+            socket.emit('clear-content', { roomId });
+            closeDashboard();
+        };
+
+        // Send chat message
+        window.sendChatMessage = function() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (message) {
+                socket.emit('chat-message', { roomId, message });
+                input.value = '';
+            }
+        };
+
+        // Add chat message to UI
+        function addChatMessage(message) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageEl = document.createElement('div');
+            messageEl.className = 'chat-message';
+            if (message.user === 'System') messageEl.classList.add('system');
+
+            const time = new Date(message.time).toLocaleTimeString();
+            messageEl.innerHTML = `
+                <div class="sender">${message.user} <span class="time">${time}</span></div>
+                <div class="text">${message.text}</div>
+            `;
+            chatMessages.appendChild(messageEl);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Open dashboard
+        function openDashboard(dashboard) {
+            const display = document.getElementById('dashboardDisplay');
+            const iframe = document.getElementById('dashboardIframe');
+            display.classList.add('active');
+
+            if (dashboard.type === 'pdf') {
+                iframe.src = `https://pdfjs.org/web/viewer.html?file=${encodeURIComponent(dashboard.data)}`;
+            } else if (dashboard.type === 'video') {
+                const videoId = dashboard.data.split('v=')[1];
+                iframe.src = `https://www.youtube.com/embed/${videoId}`;
+            }
+        }
+
+        // Close dashboard
+        window.closeDashboard = function() {
+            document.getElementById('dashboardDisplay').classList.remove('active');
+            document.getElementById('dashboardIframe').src = '';
+        };
+
+        // Show notification
+        function showNotification(message, isError = false) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.classList.toggle('error', isError);
+            notification.classList.add('visible');
+
+            setTimeout(() => {
+                notification.classList.remove('visible');
+            }, 3000);
+        }
+
+        // Copy room ID
+        document.getElementById('roomIdDisplay').addEventListener('click', () => {
+            navigator.clipboard.writeText(roomId);
+            showNotification('Room ID copied to clipboard');
+        });
+
+        // UTC clock update
+        function updateClock() {
+            const now = new Date();
+            const utcTime = now.toISOString().split('T')[1].split('.')[0] + ' UTC';
+            document.getElementById('utcClock').textContent = utcTime;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Initialize scene
+        initThreeJS();
+    </script>
+</body>
+</html>

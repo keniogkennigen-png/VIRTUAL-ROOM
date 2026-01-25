@@ -7,7 +7,6 @@ const { PeerServer } = require('peer');
 const path = require('path');
 
 // HTTPS configuration (optional - for production)
-// Only load if certificates exist
 let httpsOptions = null;
 const certPath = path.join(__dirname, 'cert');
 if (fs.existsSync(path.join(certPath, 'server.key')) &&
@@ -19,7 +18,6 @@ if (fs.existsSync(path.join(certPath, 'server.key')) &&
 }
 
 const app = express();
-// Use HTTP server by default, HTTPS if certificates are available
 const server = httpsOptions
     ? https.createServer(httpsOptions, app)
     : http.createServer(app);
@@ -32,9 +30,6 @@ const io = new Server(server, {
     pingTimeout: 60000,
     pingInterval: 25000
 });
-
-// PeerJS server for WebRTC signaling (optional - can use built-in Socket.IO)
-// const peerServer = PeerServer({ port: 9000, path: '/' });
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.static(path.join(__dirname, 'dist')));
@@ -61,13 +56,29 @@ io.on('connection', (socket) => {
 
     if (!rooms[roomId]) {
       rooms[roomId] = {
-        users: [],
+        admin: null,  // First user becomes admin
+        locked: false,
+        presenter: null,
+        users: {},
         dashboard: { mode: 'none', data: null }
       };
     }
 
-    const user = {
-      id: socket.id,
+    // Check if room is locked (only admin can enter)
+    if (rooms[roomId].locked && rooms[roomId].admin !== socket.id) {
+      socket.emit('room-locked');
+      return;
+    }
+
+    // First user becomes admin automatically
+    if (!rooms[roomId].admin) {
+      rooms[roomId].admin = socket.id;
+      rooms[roomId].presenter = socket.id;
+    }
+
+    const userId = socket.id;
+    rooms[roomId].users[userId] = {
+      id: userId,
       socketId: socket.id,
       username: username || 'Guest',
       avatarColor: avatarColor || '#00f3ff',
@@ -75,25 +86,72 @@ io.on('connection', (socket) => {
       isSpeaking: false
     };
 
-    rooms[roomId].users.push(user);
+    // Send admin info to the user
+    socket.emit('admin-info', {
+      isAdmin: userId === rooms[roomId].admin,
+      presenter: rooms[roomId].presenter
+    });
+
+    // Broadcast user list
+    io.to(roomId).emit('user-list', Object.keys(rooms[roomId].users));
 
     // Send current room state to new user
     socket.emit('room-state', rooms[roomId]);
 
     // Notify others
-    socket.to(roomId).emit('user-joined', user);
-    io.to(roomId).emit('room-users', rooms[roomId].users);
+    socket.to(roomId).emit('user-joined', rooms[roomId].users[userId]);
+    io.to(roomId).emit('room-users', Object.values(rooms[roomId].users));
 
-    console.log(`${user.username} joined room: ${roomId}`);
+    console.log(`${username || 'Guest'} joined room: ${roomId}`);
+  });
+
+  // 🔇 MUTE USER (Admin only)
+  socket.on('mute-user', ({ roomId, targetId }) => {
+    if (!rooms[roomId]) return;
+    if (rooms[roomId].admin !== socket.id) return; // Only admin can mute
+
+    const targetSocketId = rooms[roomId].users[targetId]?.socketId;
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('force-mute');
+    }
+  });
+
+  // 👢 KICK USER (Admin only)
+  socket.on('kick-user', ({ roomId, targetId }) => {
+    if (!rooms[roomId]) return;
+    if (rooms[roomId].admin !== socket.id) return; // Only admin can kick
+
+    const targetSocketId = rooms[roomId].users[targetId]?.socketId;
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('force-kick');
+    }
+  });
+
+  // 🔒 LOCK ROOM (Admin only)
+  socket.on('lock-room', ({ roomId }) => {
+    if (!rooms[roomId]) return;
+    if (rooms[roomId].admin !== socket.id) return; // Only admin can lock
+
+    rooms[roomId].locked = true;
+    io.to(roomId).emit('room-locked');
+  });
+
+  // 🎤 SET PRESENTER (Admin only)
+  socket.on('set-presenter', ({ roomId, targetId }) => {
+    if (!rooms[roomId]) return;
+    if (rooms[roomId].admin !== socket.id) return; // Only admin can set presenter
+
+    rooms[roomId].presenter = targetId;
+    io.to(roomId).emit('presenter-changed', targetId);
   });
 
   // Sit in chair
   socket.on('sit-chair', ({ roomId, chairIndex }) => {
     if (rooms[roomId]) {
-      const user = rooms[roomId].users.find(u => u.id === socket.id);
-      if (user && !rooms[roomId].users.some(u => u.chairIndex === chairIndex)) {
+      const user = rooms[roomId].users[socket.id];
+      if (user && !Object.values(rooms[roomId].users).some(u => u.chairIndex === chairIndex)) {
         user.chairIndex = chairIndex;
-        io.to(roomId).emit('room-users', rooms[roomId].users);
+        io.to(roomId).emit('room-users', Object.values(rooms[roomId].users));
       }
     }
   });
@@ -101,10 +159,10 @@ io.on('connection', (socket) => {
   // Start speaking (PTT)
   socket.on('start-speaking', ({ roomId }) => {
     if (rooms[roomId]) {
-      const user = rooms[roomId].users.find(u => u.id === socket.id);
+      const user = rooms[roomId].users[socket.id];
       if (user) {
         user.isSpeaking = true;
-        io.to(roomId).emit('room-users', rooms[roomId].users);
+        io.to(roomId).emit('room-users', Object.values(rooms[roomId].users));
       }
     }
   });
@@ -112,17 +170,17 @@ io.on('connection', (socket) => {
   // Stop speaking
   socket.on('stop-speaking', ({ roomId }) => {
     if (rooms[roomId]) {
-      const user = rooms[roomId].users.find(u => u.id === socket.id);
+      const user = rooms[roomId].users[socket.id];
       if (user) {
         user.isSpeaking = false;
-        io.to(roomId).emit('room-users', rooms[roomId].users);
+        io.to(roomId).emit('room-users', Object.values(rooms[roomId].users));
       }
     }
   });
 
   // Chat message
   socket.on('chat-message', ({ roomId, message }) => {
-    const user = rooms[roomId]?.users.find(u => u.id === socket.id);
+    const user = rooms[roomId]?.users[socket.id];
     io.to(roomId).emit('new-message', {
       user: user?.username || 'Guest',
       text: message,
@@ -136,7 +194,7 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('content-update', rooms[roomId].dashboard);
     io.to(roomId).emit('new-message', {
       user: 'System',
-      text: `📄 ${rooms[roomId].users.find(u => u.id === socket.id)?.username} shared a PDF`
+      text: `📄 ${rooms[roomId].users[socket.id]?.username} shared a PDF`
     });
   });
 
@@ -146,7 +204,7 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('content-update', rooms[roomId].dashboard);
     io.to(roomId).emit('new-message', {
       user: 'System',
-      text: `🎬 ${rooms[roomId].users.find(u => u.id === socket.id)?.username} shared a video`
+      text: `🎬 ${rooms[roomId].users[socket.id]?.username} shared a video`
     });
   });
 
@@ -184,14 +242,31 @@ io.on('connection', (socket) => {
   // Disconnect
   socket.on('disconnect', () => {
     for (const roomId in rooms) {
-      const userIndex = rooms[roomId].users.findIndex(u => u.id === socket.id);
-      if (userIndex !== -1) {
-        const user = rooms[roomId].users[userIndex];
-        rooms[roomId].users.splice(userIndex, 1);
-        io.to(roomId).emit('user-left', user);
-        io.to(roomId).emit('room-users', rooms[roomId].users);
+      if (rooms[roomId].users[socket.id]) {
+        const user = rooms[roomId].users[socket.id];
+        delete rooms[roomId].users[socket.id];
 
-        if (rooms[roomId].users.length === 0) {
+        io.to(roomId).emit('user-left', user);
+        io.to(roomId).emit('user-list', Object.keys(rooms[roomId].users));
+        io.to(roomId).emit('room-users', Object.values(rooms[roomId].users));
+
+        // If admin disconnects, assign new admin
+        if (rooms[roomId].admin === socket.id) {
+          const remainingUsers = Object.keys(rooms[roomId].users);
+          if (remainingUsers.length > 0) {
+            const newAdmin = remainingUsers[0];
+            rooms[roomId].admin = newAdmin;
+            rooms[roomId].presenter = newAdmin;
+
+            // Notify new admin
+            io.to(newAdmin).emit('admin-info', {
+              isAdmin: true,
+              presenter: newAdmin
+            });
+          }
+        }
+
+        if (Object.keys(rooms[roomId].users).length === 0) {
           delete rooms[roomId];
         }
       }
@@ -204,4 +279,5 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📝 Access: http://localhost:${PORT}?room=ROOMNAME&username=YOURNAME`);
+  console.log(`🎛️ HoloMeet VR Admin system ready`);
 });
