@@ -2,67 +2,96 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>HoloMeet VR</title>
+<title>HoloMeet VR PRO</title>
 
+<!-- A-FRAME -->
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+<!-- PHYSICS -->
+<script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@4.0.1/dist/aframe-physics-system.min.js"></script>
+
+<!-- SOCKET -->
 <script src="/socket.io/socket.io.js"></script>
 
 <style>
 body { margin:0; overflow:hidden; }
-#ui {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  z-index: 10;
-  background: rgba(0,0,0,0.6);
-  padding: 10px;
-  color: white;
-}
 </style>
 </head>
 
 <body>
 
-<div id="ui">
-  <input type="file" id="pdfInput"><br><br>
-  <input type="text" id="ytInput" placeholder="YouTube URL">
-  <button onclick="shareVideo()">Video</button>
-</div>
-
-<a-scene vr-mode-ui="enabled: true">
+<a-scene
+  vr-mode-ui="enabled: true"
+  physics="gravity:-9.8"
+  renderer="physicallyCorrectLights:true">
 
   <!-- LUCES -->
-  <a-entity light="type: ambient; intensity:0.6"></a-entity>
+  <a-entity light="type: ambient; intensity:0.5"></a-entity>
   <a-entity light="type: directional; intensity:1" position="5 10 5"></a-entity>
 
   <!-- SALA -->
-  <a-entity gltf-model="url(/Untitled.glb)"></a-entity>
-
-  <!-- 🪑 SILLAS -->
-  <a-entity id="chairs">
-    <a-box class="chair" data-index="0" position="0 0 -2"></a-box>
-    <a-box class="chair" data-index="1" position="1 0 -2"></a-box>
-    <a-box class="chair" data-index="2" position="-1 0 -2"></a-box>
-    <a-box class="chair" data-index="3" position="0 0 -3"></a-box>
-    <a-box class="chair" data-index="4" position="1 0 -3"></a-box>
-    <a-box class="chair" data-index="5" position="-1 0 -3"></a-box>
-    <a-box class="chair" data-index="6" position="0 0 -4"></a-box>
+  <a-entity
+    gltf-model="url(/Untitled.glb)"
+    static-body>
   </a-entity>
 
-  <!-- 📺 PANTALLA -->
-  <a-plane id="screen" position="0 2 -5" width="4" height="2.5" color="#111"></a-plane>
+  <!-- 📺 TV / DASHBOARD -->
+  <a-plane
+    id="dashboard"
+    position="0 2 -5"
+    width="4"
+    height="2.5"
+    color="#111"
+    class="raycastable">
+  </a-plane>
 
-  <!-- 👤 USUARIO -->
-  <a-entity id="rig" position="0 0 3">
-    <a-entity id="camera" camera look-controls wasd-controls="acceleration:20"></a-entity>
+  <!-- 🪑 SILLAS (COLISIONES) -->
+  <a-entity id="chairs">
+    <a-box class="chair" data-index="0" position="0 0 -2" static-body></a-box>
+    <a-box class="chair" data-index="1" position="1 0 -2" static-body></a-box>
+    <a-box class="chair" data-index="2" position="-1 0 -2" static-body></a-box>
+    <a-box class="chair" data-index="3" position="0 0 -3" static-body></a-box>
+    <a-box class="chair" data-index="4" position="1 0 -3" static-body></a-box>
+    <a-box class="chair" data-index="5" position="-1 0 -3" static-body></a-box>
+    <a-box class="chair" data-index="6" position="0 0 -4" static-body></a-box>
+  </a-entity>
 
-    <!-- AVATAR -->
-    <a-cylinder id="body" height="1.2" radius="0.25" color="#00f3ff" position="0 0.6 0"></a-cylinder>
-    <a-sphere radius="0.22" color="#ffd1a9" position="0 1.5 0"></a-sphere>
+  <!-- 👤 PLAYER -->
+  <a-entity id="rig" position="0 1.6 3" dynamic-body>
 
-    <!-- MANOS VR -->
-    <a-entity hand-controls="hand:left"></a-entity>
-    <a-entity hand-controls="hand:right"></a-entity>
+    <!-- CÁMARA -->
+    <a-entity
+      id="camera"
+      camera
+      look-controls
+      wasd-controls="acceleration:20">
+    </a-entity>
+
+    <!-- AVATAR SIMPLE -->
+    <a-cylinder id="body" height="1.2" radius="0.25" color="#00f3ff" position="0 -0.6 0"></a-cylinder>
+
+    <!-- 🎤 AUDIO ESPACIAL -->
+    <a-sound
+      id="voice"
+      positional="true"
+      autoplay="true">
+    </a-sound>
+
+    <!-- 🖐️ MANO IZQUIERDA -->
+    <a-entity
+      hand-controls="hand:left"
+      raycaster="objects: .raycastable"
+      laser-controls="hand:left">
+    </a-entity>
+
+    <!-- 🖐️ MANO DERECHA + LÁSER -->
+    <a-entity
+      id="rightHand"
+      hand-controls="hand:right"
+      raycaster="objects: .raycastable"
+      laser-controls="hand:right">
+    </a-entity>
+
   </a-entity>
 
 </a-scene>
@@ -76,106 +105,50 @@ const username = params.get('username') || 'Guest';
 
 socket.emit('join-room', { roomId, username });
 
-/* ================= SILLAS ================= */
-const chairs = document.querySelectorAll('.chair');
-const lockedChairs = {};
-let seated = false;
-
-chairs.forEach(chair => {
-  chair.setAttribute('color', 'green');
-  chair.addEventListener('click', () => {
-    const i = chair.dataset.index;
-    if (lockedChairs[i]) return;
-    socket.emit('sit-chair', { roomId, chairIndex: i });
-  });
+/* ================= AUDIO ESPACIAL REAL ================= */
+navigator.mediaDevices.getUserMedia({ audio:true }).then(stream => {
+  const audio = document.querySelector('#voice');
+  audio.components.sound.pool.children[0].srcObject = stream;
 });
 
-socket.on('room-users', users => {
-  Object.keys(lockedChairs).forEach(k => delete lockedChairs[k]);
+/* ================= SILLAS + ANIMACIÓN ================= */
+let seated = false;
 
-  chairs.forEach(c => c.setAttribute('color', 'green'));
+document.querySelectorAll('.chair').forEach(chair => {
+  chair.addEventListener('click', () => {
+    if (seated) return;
+    seated = true;
 
-  users.forEach(u => {
-    if (u.chairIndex !== null) {
-      lockedChairs[u.chairIndex] = u.id;
-      document.querySelector(`.chair[data-index="${u.chairIndex}"]`)
-        .setAttribute('color', 'red');
+    document.querySelector('#camera').removeAttribute('wasd-controls');
+    document.querySelector('#body').setAttribute('scale', '1 0.6 1');
 
-      if (u.id === socket.id) {
-        seated = true;
-        document.getElementById('camera').removeAttribute('wasd-controls');
-        document.getElementById('rig')
-          .setAttribute('position',
-            document.querySelector(`.chair[data-index="${u.chairIndex}"]`)
-            .getAttribute('position'));
-      }
-    }
+    document.querySelector('#rig')
+      .setAttribute('position', chair.getAttribute('position'));
+
+    socket.emit('sit-chair', {
+      roomId,
+      chairIndex: chair.dataset.index
+    });
   });
 });
 
 window.addEventListener('keydown', e => {
   if (e.key === ' ' && seated) {
     seated = false;
-    document.getElementById('camera')
+    document.querySelector('#camera')
       .setAttribute('wasd-controls', 'acceleration:20');
+    document.querySelector('#body').setAttribute('scale', '1 1 1');
   }
 });
 
-/* ================= AVATARES OTROS ================= */
-const avatars = {};
-
-socket.on('user-joined', user => {
-  if (avatars[user.id]) return;
-
-  const avatar = document.createElement('a-entity');
-  avatar.innerHTML = `
-    <a-cylinder height="1.2" radius="0.25" color="#aaa" position="0 0.6 0"></a-cylinder>
-    <a-sphere radius="0.22" color="#ffd1a9" position="0 1.5 0"></a-sphere>
-  `;
-  avatar.setAttribute('id', `avatar-${user.id}`);
-  document.querySelector('a-scene').appendChild(avatar);
-  avatars[user.id] = avatar;
-});
-
-socket.on('user-left', user => {
-  avatars[user.id]?.remove();
-  delete avatars[user.id];
-});
-
-/* ================= AUDIO ESPACIAL ================= */
-navigator.mediaDevices.getUserMedia({ audio:true }).then(stream => {
-  const audio = document.createElement('audio');
-  audio.srcObject = stream;
-  audio.muted = true;
-  audio.play();
-
-  const sound = document.createElement('a-sound');
-  sound.setAttribute('src', audio);
-  sound.setAttribute('positional', 'true');
-  document.getElementById('rig').appendChild(sound);
-});
-
-/* ================= PDF / VIDEO ================= */
-document.getElementById('pdfInput').addEventListener('change', e => {
-  const r = new FileReader();
-  r.onload = () => socket.emit('share-pdf', { roomId, pdfData:r.result });
-  r.readAsDataURL(e.target.files[0]);
-});
-
-function shareVideo() {
-  socket.emit('share-video', {
-    roomId,
-    videoUrl: document.getElementById('ytInput').value
+/* ================= LÁSER EN DASHBOARD ================= */
+document.querySelector('#rightHand')
+  .addEventListener('raycaster-intersection', e => {
+    const hit = e.detail.els[0];
+    if (hit && hit.id === 'dashboard') {
+      hit.setAttribute('color', '#333');
+    }
   });
-}
-
-socket.on('content-update', data => {
-  const screen = document.getElementById('screen');
-  if (data.type === 'pdf') screen.setAttribute('material','src',data.data);
-  if (data.type === 'video')
-    screen.setAttribute('material','src',
-      `https://www.youtube.com/embed/${data.data.split("v=")[1]}`);
-});
 </script>
 
 </body>
