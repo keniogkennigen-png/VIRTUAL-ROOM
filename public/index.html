@@ -1,73 +1,162 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="UTF-8">
 <title>HoloMeet VR</title>
 
+<!-- A-FRAME -->
 <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
+
+<!-- SOCKET.IO -->
 <script src="/socket.io/socket.io.js"></script>
-<script src="client.js"></script>
 
 <style>
 body { margin:0; overflow:hidden; }
 #ui {
-  position: absolute;
+  position: fixed;
   top: 10px;
   left: 10px;
-  z-index: 5;
+  z-index: 10;
+  background: rgba(0,0,0,0.6);
+  padding: 10px;
+  color: white;
 }
 </style>
 </head>
 
 <body>
 
+<!-- UI -->
 <div id="ui">
-  <input type="file" id="pdfInput">
-  <input type="text" id="ytInput" placeholder="YouTube URL">
-  <button onclick="shareVideo()">Share Video</button>
+  <input type="file" id="pdfInput"><br><br>
+  <input type="text" id="ytInput" placeholder="YouTube URL"><br>
+  <button onclick="shareVideo()">Compartir Video</button>
 </div>
 
-<a-scene
-  vr-mode-ui="enabled: true"
-  renderer="physicallyCorrectLights: true"
-  physics="debug:false">
+<a-scene vr-mode-ui="enabled: true">
 
   <!-- LUCES -->
   <a-entity light="type: ambient; intensity: 0.6"></a-entity>
-  <a-entity light="type: directional; intensity: 1" position="3 8 5"></a-entity>
+  <a-entity light="type: directional; intensity: 1" position="5 10 5"></a-entity>
 
-  <!-- SALA -->
-  <a-entity gltf-model="url(/Untitled.glb)" static-body></a-entity>
+  <!-- SALA 3D -->
+  <a-entity
+    gltf-model="url(/Untitled.glb)"
+    position="0 0 0"
+    scale="1 1 1">
+  </a-entity>
 
   <!-- 🪑 SILLAS (7) -->
   <a-entity id="chairs">
-    <a-box class="chair" data-index="0" position="0 0 -2"></a-box>
-    <a-box class="chair" data-index="1" position="1 0 -2"></a-box>
-    <a-box class="chair" data-index="2" position="-1 0 -2"></a-box>
-    <a-box class="chair" data-index="3" position="0 0 -3"></a-box>
-    <a-box class="chair" data-index="4" position="1 0 -3"></a-box>
-    <a-box class="chair" data-index="5" position="-1 0 -3"></a-box>
-    <a-box class="chair" data-index="6" position="0 0 -4"></a-box>
+    <a-box class="chair" data-index="0" position="0 0 -2" width="0.5" height="1" depth="0.5"></a-box>
+    <a-box class="chair" data-index="1" position="1 0 -2" width="0.5" height="1" depth="0.5"></a-box>
+    <a-box class="chair" data-index="2" position="-1 0 -2" width="0.5" height="1" depth="0.5"></a-box>
+    <a-box class="chair" data-index="3" position="0 0 -3" width="0.5" height="1" depth="0.5"></a-box>
+    <a-box class="chair" data-index="4" position="1 0 -3" width="0.5" height="1" depth="0.5"></a-box>
+    <a-box class="chair" data-index="5" position="-1 0 -3" width="0.5" height="1" depth="0.5"></a-box>
+    <a-box class="chair" data-index="6" position="0 0 -4" width="0.5" height="1" depth="0.5"></a-box>
   </a-entity>
 
-  <!-- 📄 PANTALLA -->
+  <!-- 📄 PANTALLA 3D -->
   <a-plane id="screen" position="0 2 -5" width="4" height="2.5" color="#111"></a-plane>
 
-  <!-- 👤 PLAYER -->
+  <!-- 👤 RIG DEL USUARIO -->
   <a-entity id="rig" position="0 0 3">
+
+    <!-- AVATAR HUMANO SIMPLE -->
+    <a-entity id="avatar">
+      <!-- Cuerpo -->
+      <a-cylinder height="1.2" radius="0.25" color="#00f3ff" position="0 0.6 0"></a-cylinder>
+      <!-- Cabeza -->
+      <a-sphere radius="0.22" color="#ffd1a9" position="0 1.5 0"></a-sphere>
+    </a-entity>
+
+    <!-- CÁMARA -->
     <a-entity
       id="camera"
       camera
       look-controls
-      wasd-controls="acceleration:20">
+      wasd-controls="acceleration: 20">
     </a-entity>
 
     <!-- 🖐️ MANOS VR -->
     <a-entity hand-controls="hand: left"></a-entity>
     <a-entity hand-controls="hand: right"></a-entity>
+
   </a-entity>
 
 </a-scene>
+
+<script>
+/* ================= SOCKET ================= */
+const socket = io();
+const params = new URLSearchParams(window.location.search);
+const roomId = params.get('room') || 'default';
+const username = params.get('username') || 'Guest';
+
+socket.emit('join-room', { roomId, username });
+
+/* ================= PDF ================= */
+document.getElementById('pdfInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  const reader = new FileReader();
+  reader.onload = () => {
+    socket.emit('share-pdf', {
+      roomId,
+      pdfData: reader.result,
+      filename: file.name
+    });
+  };
+  reader.readAsDataURL(file);
+});
+
+/* ================= VIDEO ================= */
+function shareVideo() {
+  const url = document.getElementById('ytInput').value;
+  socket.emit('share-video', { roomId, videoUrl: url });
+}
+
+socket.on('content-update', data => {
+  const screen = document.getElementById('screen');
+  if (data.type === 'pdf') {
+    screen.setAttribute('material', 'src', data.data);
+  }
+  if (data.type === 'video') {
+    screen.setAttribute(
+      'material',
+      'src',
+      `https://www.youtube.com/embed/${data.data.split("v=")[1]}`
+    );
+  }
+});
+
+/* ================= SILLAS ================= */
+let seated = false;
+
+document.querySelectorAll('.chair').forEach(chair => {
+  chair.addEventListener('click', () => {
+    if (seated) return;
+    seated = true;
+
+    document.getElementById('camera').removeAttribute('wasd-controls');
+    document.getElementById('rig')
+      .setAttribute('position', chair.getAttribute('position'));
+
+    socket.emit('sit-chair', {
+      roomId,
+      chairIndex: chair.dataset.index
+    });
+  });
+});
+
+window.addEventListener('keydown', e => {
+  if (e.key === ' ' && seated) {
+    seated = false;
+    document.getElementById('camera')
+      .setAttribute('wasd-controls', 'acceleration: 20');
+  }
+});
+</script>
+
 </body>
 </html>
