@@ -732,6 +732,13 @@
 
     <!-- Three.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <!-- RGBELoader for HDR environment -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/RGBELoader.js"></script>
+
+    <!-- GLTFLoader for VR avatars -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
     <script>
         // ============================================
         // HoloMeet VR - Holographic Conference Room
@@ -758,6 +765,23 @@
             currentChair: null,
             cameraMode: 'free', // 'free' or 'seated'
             presentationMode: null // 'youtube' or 'pdf'
+        };
+
+        // 🕒 UTC Clock System
+        let utcClock = {
+            canvas: null,
+            context: null,
+            texture: null,
+            mesh: null,
+            interval: null
+        };
+
+        // 🧍 VR Avatar System
+        let vrAvatars = {
+            loader: null,
+            models: {},
+            controllers: [],
+            hands: []
         };
 
         // TURN/STUN server configuration for WebRTC
@@ -1009,6 +1033,312 @@
             return colors[avatarIndex] || colors[0];
         }
 
+        // 🕒 UTC Clock Functions
+        function createUTCTimeClock() {
+            // Create canvas for the clock
+            utcClock.canvas = document.createElement('canvas');
+            utcClock.canvas.width = 512;
+            utcClock.canvas.height = 256;
+            utcClock.context = utcClock.canvas.getContext('2d');
+
+            // Create texture from canvas
+            utcClock.texture = new THREE.CanvasTexture(utcClock.canvas);
+            utcClock.texture.minFilter = THREE.LinearFilter;
+
+            // Create 3D screen mesh
+            utcClock.mesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(2.4, 1.2),
+                new THREE.MeshStandardMaterial({
+                    map: utcClock.texture,
+                    emissive: 0xffffff,
+                    emissiveIntensity: 0.8,
+                    roughness: 0.3,
+                    metalness: 0.1
+                })
+            );
+
+            // Position: Wall-mounted clock panel (right side of room)
+            utcClock.mesh.position.set(8, 4, -5);
+            utcClock.mesh.rotation.y = -Math.PI / 4;
+
+            scene.add(utcClock.mesh);
+
+            // Initial draw
+            updateUTCTime();
+
+            // Update every second
+            utcClock.interval = setInterval(updateUTCTime, 1000);
+
+            console.log('🕒 UTC Clock created successfully');
+        }
+
+        function updateUTCTime() {
+            if (!utcClock.canvas || !utcClock.context) return;
+
+            const now = new Date();
+
+            // Get UTC time and date
+            const time = now.toISOString().substr(11, 8); // HH:MM:SS
+            const date = now.toISOString().substr(0, 10); // YYYY-MM-DD
+            const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+
+            // Clear canvas with dark background
+            utcClock.context.fillStyle = '#0a0a1a';
+            utcClock.context.fillRect(0, 0, utcClock.canvas.width, utcClock.canvas.height);
+
+            // Border
+            utcClock.context.strokeStyle = '#00F3FF';
+            utcClock.context.lineWidth = 4;
+            utcClock.context.strokeRect(10, 10, 492, 236);
+
+            // Title
+            utcClock.context.fillStyle = '#00F3FF';
+            utcClock.context.font = 'bold 24px Arial';
+            utcClock.context.textAlign = 'center';
+            utcClock.context.fillText('UNIVERSAL COORDINATED TIME', utcClock.canvas.width / 2, 50);
+
+            // Time (large, cyan)
+            utcClock.context.fillStyle = '#00F3FF';
+            utcClock.context.font = 'bold 80px monospace';
+            utcClock.context.fillText(time, utcClock.canvas.width / 2, 140);
+
+            // Date (smaller, white)
+            utcClock.context.fillStyle = '#ffffff';
+            utcClock.context.font = '28px Arial';
+            utcClock.context.fillText(`${date} • ${dayOfWeek}`, utcClock.canvas.width / 2, 195);
+
+            // Update texture
+            utcClock.texture.needsUpdate = true;
+        }
+
+        // 🧍 VR Avatar System Functions
+        function initializeVRAvatars() {
+            vrAvatars.loader = new THREE.GLTFLoader();
+
+            // Create VR controllers for hands
+            if (renderer.xr) {
+                vrAvatars.controllers[0] = renderer.xr.getController(0);
+                vrAvatars.controllers[1] = renderer.xr.getController(1);
+
+                scene.add(vrAvatars.controllers[0]);
+                scene.add(vrAvatars.controllers[1]);
+
+                // Create visible hands
+                vrAvatars.hands[0] = createVRHand(0x00F3FF); // Left - cyan
+                vrAvatars.hands[1] = createVRHand(0xFF6B6B); // Right - red
+
+                vrAvatars.controllers[0].add(vrAvatars.hands[0]);
+                vrAvatars.controllers[1].add(vrAvatars.hands[1]);
+
+                console.log('🧍 VR Avatar system initialized with controllers');
+            }
+        }
+
+        function createVRHand(color) {
+            const handGroup = new THREE.Group();
+
+            // Palm
+            const palm = new THREE.Mesh(
+                new THREE.BoxGeometry(0.06, 0.02, 0.08),
+                new THREE.MeshStandardMaterial({
+                    color: color,
+                    roughness: 0.6,
+                    metalness: 0.3
+                })
+            );
+            handGroup.add(palm);
+
+            // Fingers (simplified)
+            const fingerGeo = new THREE.BoxGeometry(0.015, 0.06, 0.015);
+            const fingerMat = new THREE.MeshStandardMaterial({
+                color: color,
+                roughness: 0.7
+            });
+
+            const fingerPositions = [
+                { x: -0.02, y: -0.04, z: 0 },
+                { x: -0.007, y: -0.04, z: 0 },
+                { x: 0.007, y: -0.04, z: 0 },
+                { x: 0.02, y: -0.04, z: 0 }
+            ];
+
+            fingerPositions.forEach(pos => {
+                const finger = new THREE.Mesh(fingerGeo, fingerMat);
+                finger.position.set(pos.x, pos.y, pos.z);
+                handGroup.add(finger);
+            });
+
+            return handGroup;
+        }
+
+        function createAvatarModel(userId, isLocal = false) {
+            // Create simple humanoid avatar if no GLB model
+            const avatar = createHumanoidAvatar(isLocal);
+            avatar.userData = { userId, isLocal };
+            scene.add(avatar);
+            vrAvatars.models[userId] = avatar;
+
+            if (isLocal) {
+                avatar.visible = false; // Don't render own avatar (use camera)
+            }
+
+            console.log(`🧍 Avatar created for user: ${userId}`);
+            return avatar;
+        }
+
+        function createHumanoidAvatar(isLocal) {
+            const avatar = new THREE.Group();
+
+            // Materials
+            const skinMat = new THREE.MeshStandardMaterial({
+                color: 0xFFE4C4,
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            const bodyMat = new THREE.MeshStandardMaterial({
+                color: 0x2a2a4e,
+                roughness: 0.9,
+                metalness: 0.1
+            });
+
+            // Head
+            const head = new THREE.Mesh(
+                new THREE.SphereGeometry(0.15, 16, 16),
+                skinMat
+            );
+            head.position.y = 1.65;
+            head.castShadow = true;
+            avatar.add(head);
+
+            // Body/Torso
+            const body = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.12, 0.15, 0.6, 8),
+                bodyMat
+            );
+            body.position.y = 1.15;
+            body.castShadow = true;
+            avatar.add(body);
+
+            // Shoulders
+            const shoulderGeo = new THREE.BoxGeometry(0.5, 0.1, 0.15);
+            const shoulders = new THREE.Mesh(shoulderGeo, bodyMat);
+            shoulders.position.y = 1.4;
+            avatar.add(shoulders);
+
+            // Arms
+            const armGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.5, 8);
+            const armMat = new THREE.MeshStandardMaterial({
+                color: 0x3a3a5e,
+                roughness: 0.9
+            });
+
+            const leftArm = new THREE.Mesh(armGeo, armMat);
+            leftArm.position.set(-0.3, 1.3, 0);
+            leftArm.rotation.z = Math.PI / 8;
+            avatar.add(leftArm);
+
+            const rightArm = new THREE.Mesh(armGeo, armMat);
+            rightArm.position.set(0.3, 1.3, 0);
+            rightArm.rotation.z = -Math.PI / 8;
+            avatar.add(rightArm);
+
+            // Hands
+            const handMat = new THREE.MeshStandardMaterial({
+                color: 0xFFE4C4,
+                roughness: 0.8
+            });
+
+            const leftHand = new THREE.Mesh(
+                new THREE.SphereGeometry(0.04, 8, 8),
+                handMat
+            );
+            leftHand.position.set(-0.35, 1.0, 0);
+            avatar.add(leftHand);
+
+            const rightHand = new THREE.Mesh(
+                new THREE.SphereGeometry(0.04, 8, 8),
+                handMat
+            );
+            rightHand.position.set(0.35, 1.0, 0);
+            avatar.add(rightHand);
+
+            // Legs
+            const legGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.7, 8);
+            const legMat = new THREE.MeshStandardMaterial({
+                color: 0x1a1a2e,
+                roughness: 0.8
+            });
+
+            const leftLeg = new THREE.Mesh(legGeo, legMat);
+            leftLeg.position.set(-0.1, 0.35, 0);
+            leftLeg.castShadow = true;
+            avatar.add(leftLeg);
+
+            const rightLeg = new THREE.Mesh(legGeo, legMat);
+            rightLeg.position.set(0.1, 0.35, 0);
+            rightLeg.castShadow = true;
+            avatar.add(rightLeg);
+
+            // Nametag
+            const nametagCanvas = document.createElement('canvas');
+            nametagCanvas.width = 256;
+            nametagCanvas.height = 64;
+            const ctx = nametagCanvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.roundRect(0, 0, 256, 64, 10);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 28px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(isLocal ? state.username : 'Guest', 128, 42);
+
+            const nametagTexture = new THREE.CanvasTexture(nametagCanvas);
+            const nametagMaterial = new THREE.SpriteMaterial({
+                map: nametagTexture,
+                transparent: true
+            });
+            const nametag = new THREE.Sprite(nametagMaterial);
+            nametag.scale.set(1, 0.25, 1);
+            nametag.position.y = 2.0;
+            avatar.add(nametag);
+
+            return avatar;
+        }
+
+        function updateLocalAvatar() {
+            // Update local avatar position from camera (for others to see)
+            // This will be synced via socket.io
+            const localAvatar = vrAvatars.models['local'];
+            if (localAvatar && state.socket) {
+                state.socket.emit('avatar-update', {
+                    position: {
+                        x: camera.position.x,
+                        y: camera.position.y,
+                        z: camera.position.z
+                    },
+                    rotation: {
+                        x: camera.rotation.x,
+                        y: camera.rotation.y,
+                        z: camera.rotation.z
+                    }
+                });
+            }
+        }
+
+        function updateRemoteAvatars() {
+            // Make avatars always face the camera for better visibility
+            Object.values(vrAvatars.models).forEach(avatar => {
+                if (avatar && avatar.userData && !avatar.userData.isLocal) {
+                    avatar.lookAt(camera.position.x, avatar.position.y, camera.position.z);
+                }
+            });
+
+            // Make UTC clock always face camera
+            if (utcClock.mesh) {
+                utcClock.mesh.lookAt(camera.position);
+            }
+        }
+
         // Update participant count display
         function updateParticipantCount() {
             document.getElementById('participantCount').textContent =
@@ -1141,6 +1471,9 @@
             
             // Create environment
             createRoom();
+            createUTCTimeClock(); // 🕒 Add UTC clock to room
+            initializeVRAvatars(); // 🧍 Initialize VR avatar system
+            createCentralTable(); // Add professional glass table
             createChairs();
             createDashboard();
             createAvatars();
@@ -1216,95 +1549,198 @@
         }
 
         function createRoom() {
-            // Floor - Holographic Grid
-            const floorGeometry = new THREE.PlaneGeometry(30, 30, 50, 50);
-            const floorMaterial = new THREE.MeshStandardMaterial({
-                color: 0x1a1a2e,
-                metalness: 0.9,
-                roughness: 0.1,
-                wireframe: false
+            // Professional office environment - no sci-fi elements
+
+            // Bright sky background
+            scene.background = new THREE.Color(0xb0d0ff);
+            scene.fog = null;
+
+            // Bright Professional HDR lighting
+            const pmremGenerator = new THREE.PMREMGenerator(renderer);
+            pmremGenerator.compileEquirectangularShader();
+
+            // Load HDR environment for realistic reflections
+            new RGBELoader()
+                .setPath('https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/')
+                .load('venetian_crossroads_1k.hdr', function(texture) {
+                    const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+                    scene.environment = envMap;
+                    scene.background = texture;
+                    texture.dispose();
+                    pmremGenerator.dispose();
+                });
+
+            // Natural ambient light
+            const ambient = new THREE.AmbientLight(0xffffff, 1.2);
+            scene.add(ambient);
+
+            // Sun-like directional light with shadows
+            const dirLight = new THREE.DirectionalLight(0xffffff, 3);
+            dirLight.position.set(10, 15, 5);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 50;
+            dirLight.shadow.camera.left = -20;
+            dirLight.shadow.camera.right = 20;
+            dirLight.shadow.camera.top = 20;
+            dirLight.shadow.camera.bottom = -20;
+            scene.add(dirLight);
+
+            // Floor: Realistic wood PBR
+            const floorGeo = new THREE.PlaneGeometry(30, 30);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: 0x8B4513,
+                roughness: 0.8,
+                metalness: 0.1,
+                envMapIntensity: 1.5
             });
-            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
             floor.receiveShadow = true;
             scene.add(floor);
 
-            // Holographic Grid Overlay
-            const gridHelper = new THREE.GridHelper(30, 30, 0x00F3FF, 0x112233);
-            gridHelper.position.y = 0.01;
-            scene.add(gridHelper);
+            // Professional office floor pattern (wood planks illusion)
+            const plankGeo = new THREE.PlaneGeometry(30, 30, 30, 30);
+            const plankMat = new THREE.MeshStandardMaterial({
+                color: 0xA0522D,
+                roughness: 0.85,
+                metalness: 0.05
+            });
+            const planks = new THREE.Mesh(plankGeo, plankMat);
+            planks.rotation.x = -Math.PI / 2;
+            planks.position.y = 0.001;
+            planks.receiveShadow = true;
+            scene.add(planks);
 
-            // Walls
-            const wallMaterial = new THREE.MeshStandardMaterial({
-                color: 0x1a1a2e,
-                metalness: 0.8,
-                roughness: 0.2,
-                side: THREE.DoubleSide
+            // Neutral office walls (beige/cream)
+            const wallMat = new THREE.MeshStandardMaterial({
+                color: 0xF5F5DC,
+                roughness: 0.9,
+                metalness: 0
             });
 
-            // Back Wall
-            const backWall = new THREE.Mesh(
-                new THREE.PlaneGeometry(30, 10),
-                wallMaterial
-            );
-            backWall.position.set(0, 5, -15);
-            backWall.receiveShadow = true;
+            // Front wall (with presentation screen)
+            const frontWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
+            frontWall.position.set(0, 5, -15);
+            frontWall.receiveShadow = true;
+            scene.add(frontWall);
+
+            // Back wall
+            const backWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
+            backWall.position.set(0, 5, 15);
+            backWall.rotation.y = Math.PI;
             scene.add(backWall);
 
-            // Side Walls
-            const leftWall = new THREE.Mesh(
-                new THREE.PlaneGeometry(30, 10),
-                wallMaterial
-            );
-            leftWall.rotation.y = Math.PI / 2;
+            // Left wall
+            const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
             leftWall.position.set(-15, 5, 0);
+            leftWall.rotation.y = Math.PI / 2;
             scene.add(leftWall);
 
-            const rightWall = new THREE.Mesh(
-                new THREE.PlaneGeometry(30, 10),
-                wallMaterial
-            );
-            rightWall.rotation.y = -Math.PI / 2;
+            // Right wall
+            const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMat);
             rightWall.position.set(15, 5, 0);
+            rightWall.rotation.y = -Math.PI / 2;
             scene.add(rightWall);
 
-            // Ceiling with glow
-            const ceiling = new THREE.Mesh(
-                new THREE.PlaneGeometry(30, 30),
-                new THREE.MeshStandardMaterial({
-                    color: 0x0a0a1a,
-                    metalness: 0.9,
-                    roughness: 0.1,
-                    emissive: 0x050510,
-                    emissiveIntensity: 0.5
-                })
-            );
-            ceiling.rotation.x = Math.PI / 2;
+            // White ceiling
+            const ceilingMat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.95,
+                metalness: 0
+            });
+            const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), ceilingMat);
             ceiling.position.y = 10;
+            ceiling.rotation.x = Math.PI / 2;
             scene.add(ceiling);
 
-            // Holographic accent strips on walls
-            const stripGeometry = new THREE.BoxGeometry(0.1, 0.05, 30);
-            const stripMaterial = new THREE.MeshBasicMaterial({
-                color: 0x00F3FF,
+            // Ceiling lights (4 professional LED panels)
+            for (let x = -8; x <= 8; x += 8) {
+                for (let z = -8; z <= 8; z += 8) {
+                    const lightPanel = new THREE.Mesh(
+                        new THREE.PlaneGeometry(3, 1),
+                        new THREE.MeshBasicMaterial({ color: 0xffffff })
+                    );
+                    lightPanel.position.set(x, 9.9, z);
+                    lightPanel.rotation.x = Math.PI / 2;
+                    scene.add(lightPanel);
+
+                    const ceilingLight = new THREE.PointLight(0xffffff, 1, 15);
+                    ceilingLight.position.set(x, 9.5, z);
+                    scene.add(ceilingLight);
+                }
+            }
+
+            // Windows with glass effect (on left and right walls)
+            const windowMat = new THREE.MeshPhysicalMaterial({
+                color: 0xffffff,
+                transmission: 0.9,
+                roughness: 0,
+                thickness: 0.5,
                 transparent: true,
-                opacity: 0.8
+                opacity: 0.3
             });
 
-            for (let i = 0; i < 3; i++) {
-                const strip = new THREE.Mesh(stripGeometry, stripMaterial);
-                strip.position.set(-14.9, 2 + i * 2.5, 0);
-                scene.add(strip);
+            // Left windows
+            for (let i = 0; i < 2; i++) {
+                const window1 = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), windowMat);
+                window1.position.set(-14.9, 6, -5 + i * 10);
+                window1.rotation.y = Math.PI / 2;
+                scene.add(window1);
 
-                const strip2 = strip.clone();
-                strip2.position.set(14.9, 2 + i * 2.5, 0);
-                scene.add(strip2);
+                // Window frame
+                const frameMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
+                const frame1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4.2, 6.2), frameMat);
+                frame1.position.set(-14.85, 6, -5 + i * 10);
+                scene.add(frame1);
             }
+
+            // Right windows
+            for (let i = 0; i < 2; i++) {
+                const window2 = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), windowMat);
+                window2.position.set(14.9, 6, -5 + i * 10);
+                window2.rotation.y = -Math.PI / 2;
+                scene.add(window2);
+
+                // Window frame
+                const frameMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8 });
+                const frame2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4.2, 6.2), frameMat);
+                frame2.position.set(14.85, 6, -5 + i * 10);
+                scene.add(frame2);
+            }
+
+            // Professional office plants (corners)
+            const potGeo = new THREE.CylinderGeometry(0.4, 0.3, 0.6, 16);
+            const potMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x228B22, roughness: 0.8 });
+
+            // Plant positions
+            const plantPositions = [
+                { x: -12, z: -12 },
+                { x: 12, z: -12 },
+                { x: -12, z: 12 },
+                { x: 12, z: 12 }
+            ];
+
+            plantPositions.forEach(pos => {
+                const pot = new THREE.Mesh(potGeo, potMat);
+                pot.position.set(pos.x, 0.3, pos.z);
+                pot.castShadow = true;
+                scene.add(pot);
+
+                // Simple plant sphere
+                const plant = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 16), leafMat);
+                plant.position.set(pos.x, 1.2, pos.z);
+                plant.castShadow = true;
+                scene.add(plant);
+            });
         }
 
         function createChairs() {
             const chairPositions = [];
-            const radius = 6;
+            const radius = 7;
             const startAngle = Math.PI * 0.3;
             const endAngle = Math.PI * 0.7;
 
@@ -1316,166 +1752,259 @@
             }
 
             chairPositions.forEach((pos, index) => {
-                const chair = createSciFiChair(pos.x, pos.z, pos.angle);
+                const chair = createOfficeChair(pos.x, pos.z, pos.angle);
                 chair.userData = { index, occupied: false };
                 chairs.push(chair);
                 scene.add(chair);
             });
         }
 
-        function createSciFiChair(x, z, angle) {
+        function createOfficeChair(x, z, angle) {
             const chairGroup = new THREE.Group();
 
-            // Base
-            const baseGeometry = new THREE.CylinderGeometry(0.4, 0.5, 0.1, 32);
-            const baseMaterial = new THREE.MeshStandardMaterial({
-                color: 0x2a2a4e,
-                metalness: 0.9,
-                roughness: 0.1
+            // Professional office chair materials
+            const fabricMat = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                roughness: 0.9,
+                metalness: 0,
+                clearcoat: 0.2
             });
-            const base = new THREE.Mesh(baseGeometry, baseMaterial);
-            base.position.y = 0.05;
-            base.castShadow = true;
-            chairGroup.add(base);
-
-            // Stem
-            const stemGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.4, 16);
-            const stemMaterial = new THREE.MeshStandardMaterial({
-                color: 0x00F3FF,
-                metalness: 0.9,
-                roughness: 0.1,
-                emissive: 0x00F3FF,
-                emissiveIntensity: 0.3
+            const backMat = new THREE.MeshStandardMaterial({
+                color: 0x222222,
+                roughness: 0.95
             });
-            const stem = new THREE.Mesh(stemGeometry, stemMaterial);
-            stem.position.y = 0.25;
-            chairGroup.add(stem);
-
-            // Seat
-            const seatGeometry = new THREE.BoxGeometry(0.5, 0.08, 0.5);
-            const seatMaterial = new THREE.MeshStandardMaterial({
-                color: 0x3a3a5e,
+            const metalMat = new THREE.MeshStandardMaterial({
+                color: 0x444444,
                 metalness: 0.8,
                 roughness: 0.2
             });
-            const seat = new THREE.Mesh(seatGeometry, seatMaterial);
-            seat.position.y = 0.5;
+            const chromeMat = new THREE.MeshStandardMaterial({
+                color: 0x888888,
+                metalness: 0.95,
+                roughness: 0.1
+            });
+
+            // Seat cushion
+            const seatGeo = new THREE.BoxGeometry(1.2, 0.2, 1.2);
+            const seat = new THREE.Mesh(seatGeo, fabricMat);
+            seat.position.y = 0.9;
             seat.castShadow = true;
             chairGroup.add(seat);
 
             // Backrest
-            const backGeometry = new THREE.BoxGeometry(0.5, 0.4, 0.05);
-            const backMaterial = new THREE.MeshStandardMaterial({
-                color: 0x3a3a5e,
-                metalness: 0.8,
-                roughness: 0.2
-            });
-            const back = new THREE.Mesh(backGeometry, backMaterial);
-            back.position.set(0, 0.75, -0.22);
+            const backGeo = new THREE.BoxGeometry(1.2, 2, 0.2);
+            const back = new THREE.Mesh(backGeo, backMat);
+            back.position.set(0, 1.9, -0.5);
             back.rotation.x = -0.1;
             back.castShadow = true;
             chairGroup.add(back);
 
-            // Armrests
-            const armGeometry = new THREE.BoxGeometry(0.05, 0.02, 0.3);
-            const armMaterial = new THREE.MeshStandardMaterial({
-                color: 0x00F3FF,
-                metalness: 0.9,
-                roughness: 0.1,
-                emissive: 0x00F3FF,
-                emissiveIntensity: 0.2
-            });
+            // Headrest (optional, for executive chairs)
+            const headrestGeo = new THREE.BoxGeometry(0.8, 0.4, 0.15);
+            const headrest = new THREE.Mesh(headrestGeo, fabricMat);
+            headrest.position.set(0, 3, -0.55);
+            headrest.castShadow = true;
+            chairGroup.add(headrest);
 
-            const arm1 = new THREE.Mesh(armGeometry, armMaterial);
-            arm1.position.set(0.25, 0.6, 0);
+            // Armrests
+            const armrestGeo = new THREE.BoxGeometry(0.15, 0.08, 0.8);
+            const armrestMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.5 });
+
+            const arm1 = new THREE.Mesh(armrestGeo, armrestMat);
+            arm1.position.set(0.6, 1.5, 0);
             chairGroup.add(arm1);
 
-            const arm2 = new THREE.Mesh(armGeometry, armMaterial);
-            arm2.position.set(-0.25, 0.6, 0);
+            const arm2 = new THREE.Mesh(armrestGeo, armrestMat);
+            arm2.position.set(-0.6, 1.5, 0);
             chairGroup.add(arm2);
+
+            // Armrest supports
+            const armSupportGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.6);
+            const armSupport1 = new THREE.Mesh(armSupportGeo, metalMat);
+            armSupport1.position.set(0.6, 1.2, 0);
+            chairGroup.add(armSupport1);
+
+            const armSupport2 = new THREE.Mesh(armSupportGeo, metalMat);
+            armSupport2.position.set(-0.6, 1.2, 0);
+            chairGroup.add(armSupport2);
+
+            // Chair base (5-star legs)
+            for (let i = 0; i < 5; i++) {
+                const legAngle = (i / 5) * Math.PI * 2;
+                const legGeo = new THREE.BoxGeometry(0.08, 0.08, 0.6);
+                const leg = new THREE.Mesh(legGeo, chromeMat);
+                leg.position.set(
+                    Math.cos(legAngle) * 0.35,
+                    0.4,
+                    Math.sin(legAngle) * 0.35
+                );
+                leg.rotation.y = -legAngle;
+                chairGroup.add(leg);
+
+                // Casters/wheels
+                const wheelGeo = new THREE.SphereGeometry(0.06);
+                const wheel = new THREE.Mesh(wheelGeo, metalMat);
+                wheel.position.set(
+                    Math.cos(legAngle) * 0.6,
+                    0.06,
+                    Math.sin(legAngle) * 0.6
+                );
+                chairGroup.add(wheel);
+            }
+
+            // Central cylinder
+            const cylinderGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.4, 16);
+            const cylinder = new THREE.Mesh(cylinderGeo, chromeMat);
+            cylinder.position.y = 0.65;
+            chairGroup.add(cylinder);
 
             // Position the entire chair
             chairGroup.position.set(x, 0, z);
-            chairGroup.rotation.y = angle;
+            chairGroup.rotation.y = angle + Math.PI;
 
             return chairGroup;
+        }
+
+        function createCentralTable() {
+            // Professional glass and metal conference table
+            const tableGroup = new THREE.Group();
+
+            // Glass tabletop (round, 10-person capacity)
+            const tableTopGeo = new THREE.CylinderGeometry(4.5, 4.5, 0.15, 64);
+            const tableTopMat = new THREE.MeshPhysicalMaterial({
+                color: 0x888888,
+                transmission: 0.7,
+                opacity: 0.9,
+                metalness: 0.1,
+                roughness: 0.1,
+                transparent: true,
+                thickness: 0.5
+            });
+            const tableTop = new THREE.Mesh(tableTopGeo, tableTopMat);
+            tableTop.position.y = 1.8;
+            tableTop.castShadow = true;
+            tableTop.receiveShadow = true;
+            tableGroup.add(tableTop);
+
+            // Table edge trim (metallic ring)
+            const trimGeo = new THREE.TorusGeometry(4.5, 0.05, 8, 64);
+            const trimMat = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                metalness: 0.9,
+                roughness: 0.2
+            });
+            const trim = new THREE.Mesh(trimGeo, trimMat);
+            trim.rotation.x = Math.PI / 2;
+            trim.position.y = 1.8;
+            tableGroup.add(trim);
+
+            // Central support column
+            const columnGeo = new THREE.CylinderGeometry(0.25, 0.3, 1.6, 32);
+            const columnMat = new THREE.MeshStandardMaterial({
+                color: 0x444444,
+                metalness: 0.85,
+                roughness: 0.2
+            });
+            const column = new THREE.Mesh(columnGeo, columnMat);
+            column.position.y = 0.9;
+            column.castShadow = true;
+            tableGroup.add(column);
+
+            // Base (heavy stable base)
+            const baseGeo = new THREE.CylinderGeometry(1.2, 1.4, 0.15, 32);
+            const baseMat = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                metalness: 0.9,
+                roughness: 0.3
+            });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.position.y = 0.075;
+            base.castShadow = true;
+            tableGroup.add(base);
+
+            // Add table to scene
+            tableGroup.position.set(0, 0, 0);
+            scene.add(tableGroup);
         }
 
         function createDashboard() {
             dashboard = new THREE.Group();
 
-            // Main screen - curved holographic display
-            const screenGeometry = new THREE.CylinderGeometry(4, 4, 0.1, 64, 1, false, Math.PI * 0.8, Math.PI * 0.4);
-            const screenMaterial = new THREE.MeshStandardMaterial({
-                color: 0x000000,
-                metalness: 0.1,
-                roughness: 0.1,
-                emissive: 0x7000FF,
-                emissiveIntensity: 0.1,
-                transparent: true,
-                opacity: 0.95,
-                side: THREE.DoubleSide
-            });
-            const screen = new THREE.Mesh(screenGeometry, screenMaterial);
-            screen.rotation.z = Math.PI / 2;
-            screen.rotation.y = Math.PI / 2;
-            screen.position.y = 2;
-            dashboard.add(screen);
+            // Professional flat presentation screen (16:9 aspect ratio)
+            const screenWidth = 5.12; // 16:9 ratio based on height
+            const screenHeight = 2.88;
 
-            // Screen frame
-            const frameGeometry = new THREE.TorusGeometry(4, 0.1, 16, 64, Math.PI * 0.8);
-            const frameMaterial = new THREE.MeshStandardMaterial({
-                color: 0x00F3FF,
-                metalness: 0.9,
-                roughness: 0.1,
-                emissive: 0x00F3FF,
-                emissiveIntensity: 0.5
+            // Screen frame (professional dark bezel)
+            const frameGeo = new THREE.BoxGeometry(screenWidth + 0.15, screenHeight + 0.1, 0.08);
+            const frameMat = new THREE.MeshStandardMaterial({
+                color: 0x1a1a1a,
+                roughness: 0.3,
+                metalness: 0.8
             });
-            const frame = new THREE.Mesh(frameGeometry, frameMaterial);
-            frame.rotation.z = Math.PI / 2;
-            frame.rotation.y = Math.PI / 0.5;
-            frame.position.y = 2;
+            const frame = new THREE.Mesh(frameGeo, frameMat);
+            frame.position.y = 3;
             dashboard.add(frame);
 
-            // Stand
-            const standGeometry = new THREE.CylinderGeometry(0.15, 0.2, 3, 32);
-            const standMaterial = new THREE.MeshStandardMaterial({
-                color: 0x2a2a4e,
+            // Actual screen (black glass)
+            const screenGeo = new THREE.PlaneGeometry(screenWidth, screenHeight);
+            const screenMat = new THREE.MeshStandardMaterial({
+                color: 0x000000,
+                roughness: 0.1,
                 metalness: 0.9,
-                roughness: 0.1
+                emissive: 0x000000,
+                emissiveIntensity: 0
             });
-            const stand = new THREE.Mesh(standGeometry, standMaterial);
-            stand.position.y = -0.5;
-            stand.castShadow = true;
-            dashboard.add(stand);
+            const screen = new THREE.Mesh(screenGeo, screenMat);
+            screen.position.y = 3;
+            screen.position.z = 0.045;
+            dashboard.add(screen);
 
-            // Base
-            const baseGeometry = new THREE.CylinderGeometry(0.8, 1, 0.15, 32);
-            const baseMaterial = new THREE.MeshStandardMaterial({
-                color: 0x2a2a4e,
-                metalness: 0.9,
-                roughness: 0.1
-            });
-            const base = new THREE.Mesh(baseGeometry, baseMaterial);
-            base.position.y = -2;
-            base.castShadow = true;
-            dashboard.add(base);
-
-            // Holographic edge glow
-            const glowGeometry = new THREE.CylinderGeometry(4.05, 4.05, 0.1, 64, 1, false, Math.PI * 0.8, Math.PI * 0.4);
-            const glowMaterial = new THREE.MeshBasicMaterial({
-                color: 0x7000FF,
+            // Screen border lighting (thin LED strip effect)
+            const borderGeo = new THREE.BoxGeometry(screenWidth + 0.05, 0.02, 0.01);
+            const borderMat = new THREE.MeshBasicMaterial({
+                color: 0x00F3FF,
                 transparent: true,
-                opacity: 0.3,
-                side: THREE.DoubleSide
+                opacity: 0.8
             });
-            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-            glow.rotation.z = Math.PI / 2;
-            glow.rotation.y = Math.PI / 2;
-            glow.position.y = 2.01;
-            dashboard.add(glow);
 
-            dashboard.position.set(0, 0, -8);
+            const topBorder = new THREE.Mesh(borderGeo, borderMat);
+            topBorder.position.set(0, screenHeight / 2 + 0.03, 0.045);
+            dashboard.add(topBorder);
+
+            const bottomBorder = new THREE.Mesh(borderGeo, borderMat);
+            bottomBorder.position.set(0, -screenHeight / 2 - 0.03, 0.045);
+            dashboard.add(bottomBorder);
+
+            // Screen mount/stand (professional wall-mounted style)
+            const mountGeo = new THREE.BoxGeometry(0.8, 0.1, 0.3);
+            const mountMat = new THREE.MeshStandardMaterial({
+                color: 0x333333,
+                roughness: 0.5,
+                metalness: 0.7
+            });
+            const mount = new THREE.Mesh(mountGeo, mountMat);
+            mount.position.set(0, 1.55, -0.1);
+            dashboard.add(mount);
+
+            // Support arm
+            const armGeo = new THREE.BoxGeometry(0.08, 1.4, 0.15);
+            const arm = new THREE.Mesh(armGeo, mountMat);
+            arm.position.set(0, 2.2, -0.1);
+            dashboard.add(arm);
+
+            // Base plate (wall mount)
+            const basePlateGeo = new THREE.BoxGeometry(0.6, 0.6, 0.05);
+            const basePlate = new THREE.Mesh(basePlateGeo, mountMat);
+            basePlate.position.set(0, 1.55, -0.15);
+            dashboard.add(basePlate);
+
+            // Subtle ambient light behind screen
+            const screenLight = new THREE.PointLight(0xffffff, 0.3, 4);
+            screenLight.position.set(0, 3, -1);
+            dashboard.add(screenLight);
+
+            // Position on front wall
+            dashboard.position.set(0, 0, -9.8);
             scene.add(dashboard);
         }
 
@@ -1485,7 +2014,15 @@
             avatars = [];
 
             state.participants.forEach((participant, index) => {
-                const avatar = createAvatar(participant);
+                // Create VR humanoid avatar with body
+                const avatar = createHumanoidAvatar(false);
+                avatar.userData = {
+                    id: participant.id,
+                    name: participant.name,
+                    chair: participant.chair
+                };
+
+                // Position avatar
                 if (participant.chair !== null && participant.chair !== undefined) {
                     // Place avatar at their chair
                     const chair = chairs[participant.chair];
@@ -1502,9 +2039,22 @@
                         (Math.random() - 0.5) * 4 + 4
                     );
                 }
+
                 avatars.push(avatar);
                 scene.add(avatar);
+
+                // Also add to VR avatars system for full-body tracking
+                if (participant.id) {
+                    createAvatarModel(participant.id.toString(), false);
+                    if (vrAvatars.models[participant.id.toString()]) {
+                        vrAvatars.models[participant.id.toString()].position.copy(avatar.position);
+                        vrAvatars.models[participant.id.toString()].rotation.copy(avatar.rotation);
+                    }
+                }
             });
+
+            // Create local avatar
+            createAvatarModel('local', true);
         }
 
         function createAvatar(participantData) {
@@ -2052,6 +2602,12 @@
             if (window.cameraControls) {
                 window.cameraControls.update();
             }
+
+            // 🧍 Update VR avatars (face camera, sync hands)
+            updateRemoteAvatars();
+
+            // 🕒 Update local avatar position for multiplayer sync
+            updateLocalAvatar();
 
             // Animate dashboard glow
             const dashboardGlow = dashboard.children.find(c => c.material && c.material.emissive);
